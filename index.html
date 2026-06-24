@@ -503,7 +503,7 @@ function App() {
     {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"}]},
     {s:"Marketing",items:[{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"gmail",l:"Gmail"}]},
-    {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Net Sheet"},{id:"tx",l:"Transactions"},{id:"listing",l:"Listing Pres."},{id:"buyer",l:"Buyer Criteria"}]},
+    {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"listing",l:"Listing Pres."},{id:"buyer",l:"Buyer Criteria"}]},
     {s:"Business",items:[{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"},{id:"score",l:"Scorecard"}]}
   ];
 
@@ -568,6 +568,7 @@ function App() {
           {tab==="gmail"     && <PanelGmail />}
           {tab==="oh"        && <PanelOH {...pp} />}
           {tab==="net"       && <PanelNet {...pp} />}
+          {tab==="buyernet"  && <PanelBuyerNet {...pp} />}
           {tab==="tx"        && <PanelTx {...pp} />}
           {tab==="listing"   && <PanelListing {...pp} />}
           {tab==="buyer"     && <PanelBuyer {...pp} />}
@@ -2230,7 +2231,7 @@ function PanelOH({oh,setOh}) {
 
 /* ── NET SHEET ───────────────────────────────────────────────── */
 function PanelNet({leads,setLeads}) {
-  var DEF = {price:715000,loan:380000,lc:2.5,bc:2.5,escrow:1200,title:1800,nhd:125,warranty:600,repairs:0,other:0};
+  var DEF = {price:715000,loan:380000,lc:2.5,bc:2.5,cityTax:0,propTax:0,conc:0,concMode:"pct",closing:3500,repairs:0,misc:0,other:0};
   var [v,setV] = useState(DEF);
   var [parties,setParties] = useState([]);
   var [leadId,setLeadId] = useState("");
@@ -2255,9 +2256,11 @@ function PanelNet({leads,setLeads}) {
   function partyFld(i,k){ return function(e){ var val=e.target.value; setParties(function(p){ return p.map(function(c,j){ return j===i?{...c,[k]:val}:c; }); }); }; }
   function delParty(i){ setParties(function(p){ return p.filter(function(c,j){ return j!==i; }); }); }
   var totalPct = parties.reduce(function(a,c){ return a+(Number(c.pct)||0); },0);
-  var lc=v.lc/100*v.price, bc=v.bc/100*v.price, tax=Math.round(v.price/1000)*1.10, net=v.price-v.loan-lc-bc-tax-v.escrow-v.title-v.nhd-v.warranty-v.repairs-v.other;
+  var lc=v.lc/100*v.price, bc=v.bc/100*v.price, tax=Math.round(v.price/1000)*1.10;
+  var conc = (v.concMode==="amt") ? (Number(v.conc)||0) : (v.price*(Number(v.conc)||0)/100);
+  var net = v.price - v.loan - lc - bc - tax - (Number(v.cityTax)||0) - (Number(v.propTax)||0) - conc - (Number(v.closing)||0) - v.repairs - (Number(v.misc)||0) - v.other;
   var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
-  var rows = [["Sale price",fmtMoney(v.price),false],["Loan payoff","− "+fmtMoney(v.loan),true],["Listing commission","− "+fmtMoney(Math.round(lc)),true],["Buyer commission","− "+fmtMoney(Math.round(bc)),true],["Transfer tax ($1.10/$1k)","− "+fmtMoney(Math.round(tax)),true],["Escrow","− "+fmtMoney(v.escrow),true],["Title","− "+fmtMoney(v.title),true],["NHD","− "+fmtMoney(v.nhd),true],["Warranty","− "+fmtMoney(v.warranty),true],["Repairs","− "+fmtMoney(v.repairs),true],["Other","− "+fmtMoney(v.other),true]];
+  var rows = [["Sale price",fmtMoney(v.price),false],["Loan balance / payoff","− "+fmtMoney(v.loan),true],["Listing commission ("+v.lc+"%)","− "+fmtMoney(Math.round(lc)),true],["Buyer commission ("+v.bc+"%)","− "+fmtMoney(Math.round(bc)),true],["County transfer tax ($1.10/$1k)","− "+fmtMoney(Math.round(tax)),true],["City transfer tax","− "+fmtMoney(Number(v.cityTax)||0),true],["Property tax (proration)","− "+fmtMoney(Number(v.propTax)||0),true],["Seller concession"+(v.concMode==="pct"?" ("+(v.conc||0)+"%)":""),"− "+fmtMoney(Math.round(conc)),true],["Closing costs","− "+fmtMoney(Number(v.closing)||0),true],["Repairs","− "+fmtMoney(v.repairs),true],["Misc","− "+fmtMoney(Number(v.misc)||0),true],["Other","− "+fmtMoney(v.other),true]];
   return (
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:10}}>Seller's Net Sheet</div>
@@ -2273,16 +2276,17 @@ function PanelNet({leads,setLeads}) {
       </Card>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <Card title="Deal Details">
-          <Row><Fld label="Sale price ($)"><input style={inp} type="number" value={v.price} onChange={upd("price")} /></Fld><Fld label="Loan payoff ($)"><input style={inp} type="number" value={v.loan} onChange={upd("loan")} /></Fld></Row>
-          <Row><Fld label="Listing comm (%)"><input style={inp} type="number" step=".1" value={v.lc} onChange={upd("lc")} /></Fld><Fld label="Buyer comm (%)"><input style={inp} type="number" step=".1" value={v.bc} onChange={upd("bc")} /></Fld></Row>
-          <Row><Fld label="Escrow ($)"><input style={inp} type="number" value={v.escrow} onChange={upd("escrow")} /></Fld><Fld label="Title ($)"><input style={inp} type="number" value={v.title} onChange={upd("title")} /></Fld></Row>
-          <Row><Fld label="NHD ($)"><input style={inp} type="number" value={v.nhd} onChange={upd("nhd")} /></Fld><Fld label="Warranty ($)"><input style={inp} type="number" value={v.warranty} onChange={upd("warranty")} /></Fld></Row>
-          <Row><Fld label="Repairs ($)"><input style={inp} type="number" value={v.repairs} onChange={upd("repairs")} /></Fld><Fld label="Other ($)"><input style={inp} type="number" value={v.other} onChange={upd("other")} /></Fld></Row>
+          <Row><Fld label="Sale price ($)"><input style={inp} type="number" value={v.price} onChange={upd("price")} /></Fld><Fld label="Loan balance / payoff ($)"><input style={inp} type="number" value={v.loan} onChange={upd("loan")} /></Fld></Row>
+          <Row><Fld label="Seller comm (%)"><input style={inp} type="number" step=".1" value={v.lc} onChange={upd("lc")} /></Fld><Fld label="Buyer comm (%)"><input style={inp} type="number" step=".1" value={v.bc} onChange={upd("bc")} /></Fld></Row>
+          <Row><Fld label="City transfer tax ($)"><input style={inp} type="number" value={v.cityTax} onChange={upd("cityTax")} /></Fld><Fld label="Property tax proration ($)"><input style={inp} type="number" value={v.propTax} onChange={upd("propTax")} /></Fld></Row>
+          <Row><Fld label={"Seller concession ("+(v.concMode==="amt"?"$":"%")+")"}><input style={inp} type="number" step="any" value={v.conc} onChange={upd("conc")} /></Fld><Fld label="Concession type"><select style={inp} value={v.concMode} onChange={function(e){ var m=e.target.value; setV(function(p){ return {...p,concMode:m}; }); }}><option value="pct">% of price</option><option value="amt">$ amount</option></select></Fld></Row>
+          <Row><Fld label="Closing costs ($)"><input style={inp} type="number" value={v.closing} onChange={upd("closing")} /></Fld><Fld label="Repairs ($)"><input style={inp} type="number" value={v.repairs} onChange={upd("repairs")} /></Fld></Row>
+          <Row><Fld label="Misc ($)"><input style={inp} type="number" value={v.misc} onChange={upd("misc")} /></Fld><Fld label="Other ($)"><input style={inp} type="number" value={v.other} onChange={upd("other")} /></Fld></Row>
         </Card>
         <Card title="Net Proceeds">
           {rows.map(function(x){ return <div key={x[0]} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid "+C.br,fontSize:13}}><span style={{color:C.t2}}>{x[0]}</span><span style={{fontWeight:500,color:x[2]?C.ro:C.tx}}>{x[1]}</span></div>; })}
           <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginTop:4,borderTop:"2px solid "+C.brm,fontSize:15,fontWeight:700}}><span>Est. Net Proceeds</span><span style={{color:C.ac}}>{fmtMoney(Math.round(net))}</span></div>
-          <Btn v="gold" onClick={function(){ setAL(true); callAI("Explain this seller net sheet in plain language: Sale price "+fmtMoney(v.price)+", loan payoff "+fmtMoney(v.loan)+", commissions "+fmtMoney(Math.round(lc+bc))+", transfer tax "+fmtMoney(Math.round(tax))+", fees "+fmtMoney(v.escrow+v.title+v.nhd+v.warranty)+", repairs/other "+fmtMoney(v.repairs+v.other)+", net "+fmtMoney(Math.round(net))+". Warm, clear, under 120 words.").then(function(t){ setAT(t); setAL(false); }); }} style={{marginTop:8}}>✨ Explain to seller</Btn>
+          <Btn v="gold" onClick={function(){ setAL(true); callAI("Explain this seller net sheet in plain language: Sale price "+fmtMoney(v.price)+", loan payoff "+fmtMoney(v.loan)+", commissions "+fmtMoney(Math.round(lc+bc))+", transfer taxes "+fmtMoney(Math.round(tax)+(Number(v.cityTax)||0))+", closing costs "+fmtMoney(Number(v.closing)||0)+", concession "+fmtMoney(Math.round(conc))+", repairs/misc/other "+fmtMoney(v.repairs+(Number(v.misc)||0)+v.other)+", net "+fmtMoney(Math.round(net))+". Warm, clear, under 120 words.").then(function(t){ setAT(t); setAL(false); }); }} style={{marginTop:8}}>✨ Explain to seller</Btn>
           <AIBox text={aiTxt} loading={aiLd} />
         </Card>
       </div>
@@ -2303,6 +2307,65 @@ function PanelNet({leads,setLeads}) {
           {parties.length>0 && <span style={{fontSize:11,color:C.t3}}>Net to split: {fmtMoney(Math.round(net))}</span>}
         </div>
       </Card>
+    </div>
+  );
+}
+
+/* ── BUYER NET SHEET ─────────────────────────────────────────── */
+function PanelBuyerNet({leads,setLeads}) {
+  var BDEF = {price:715000,downPct:20,rate:6.5,term:30,closing:11000,earnest:10000,sellerCredit:0};
+  var [v,setV] = useState(BDEF);
+  var [leadId,setLeadId] = useState("");
+  var [saveMsg,setSaveMsg] = useState("");
+  var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
+  function upd(k){ return function(e){ setV(function(p){ return {...p,[k]:Number(e.target.value)||0}; }); }; }
+  var buyers = (leads||[]).filter(function(l){ return l.type==="buyer"||l.type==="both"; });
+  var curLead = (leads||[]).find(function(x){ return x.id===leadId; });
+  function pickLead(e){ var id=e.target.value; setLeadId(id); setSaveMsg(""); var L=(leads||[]).find(function(x){ return x.id===id; }); if(L&&L.buyerNet){ setV(L.buyerNet); setSaveMsg("📂 Loaded "+L.first+"'s saved buyer sheet"+(L.buyerNetDate?" ("+fmtDate(L.buyerNetDate)+")":"")+"."); } }
+  function saveToLead(){ if(!leadId){ setSaveMsg("Pick a buyer above to save to."); return; } setLeads(function(p){ return p.map(function(l){ return l.id===leadId?{...l,buyerNet:v,buyerNetDate:toDay()}:l; }); }); var L=(leads||[]).find(function(x){ return x.id===leadId; }); setSaveMsg("✓ Saved to "+(L?L.first+" "+L.last:"buyer")+"."); }
+  function resetSheet(){ setV(BDEF); setSaveMsg("Reset to a blank sheet."); }
+
+  var down = Math.round(v.price*(Number(v.downPct)||0)/100);
+  var loanAmt = v.price - down;
+  var credits = (Number(v.earnest)||0)+(Number(v.sellerCredit)||0);
+  var costs = (Number(v.closing)||0);
+  var cashToClose = down + costs - credits;
+  var r=(Number(v.rate)||0)/100/12, n=(Number(v.term)||30)*12;
+  var pi = r>0 ? Math.round(loanAmt*r/(1-Math.pow(1+r,-n))) : Math.round(loanAmt/(n||360));
+  var rows = [["Down payment ("+v.downPct+"%)",fmtMoney(down),false],["Closing costs (fees, title, escrow, prepaids)",fmtMoney(v.closing),false],["Earnest money (credit)","− "+fmtMoney(v.earnest),true],["Seller credit","− "+fmtMoney(v.sellerCredit),true]];
+
+  return (
+    <div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:10}}>Buyer's Net Sheet</div>
+      <Card style={{marginBottom:10}}>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <span style={{fontSize:12,color:C.t3}}>Buyer sheet for:</span>
+          <select style={{...inp,width:210,fontSize:12}} value={leadId} onChange={pickLead}><option value="">— select a buyer —</option>{buyers.map(function(l){ return <option key={l.id} value={l.id}>{l.first} {l.last}{l.buyerNet?" 💾":""}</option>; })}</select>
+          <Btn v="primary" style={{fontSize:11}} onClick={saveToLead}>{curLead&&curLead.buyerNet?"💾 Update saved sheet":"💾 Save to buyer"}</Btn>
+          {curLead&&curLead.buyerNet && <Btn style={{fontSize:11}} onClick={resetSheet}>Reset</Btn>}
+          {saveMsg && <span style={{fontSize:11,color:C.ac}}>{saveMsg}</span>}
+        </div>
+      </Card>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <Card title="Purchase Details">
+          <Row><Fld label="Purchase price ($)"><input style={inp} type="number" value={v.price} onChange={upd("price")} /></Fld><Fld label="Down payment (%)"><input style={inp} type="number" step="any" value={v.downPct} onChange={upd("downPct")} /></Fld></Row>
+          <Row><Fld label="Interest rate (%)"><input style={inp} type="number" step="any" value={v.rate} onChange={upd("rate")} /></Fld><Fld label="Loan term (yrs)"><input style={inp} type="number" value={v.term} onChange={upd("term")} /></Fld></Row>
+          <Row><Fld label="Closing costs ($)"><input style={inp} type="number" value={v.closing} onChange={upd("closing")} /></Fld><Fld label="Earnest money ($)"><input style={inp} type="number" value={v.earnest} onChange={upd("earnest")} /></Fld></Row>
+          <Row><Fld label="Seller credit ($)"><input style={inp} type="number" value={v.sellerCredit} onChange={upd("sellerCredit")} /></Fld><Fld label=""><span/></Fld></Row>
+          <div style={{fontSize:11,color:C.t3,marginTop:2}}>💡 "Closing costs" = lender/loan fees, title, escrow, inspection, appraisal, and prepaid taxes/insurance combined.</div>
+        </Card>
+        <Card title="Estimated Cash to Close">
+          {rows.map(function(x){ return <div key={x[0]} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid "+C.br,fontSize:13}}><span style={{color:C.t2}}>{x[0]}</span><span style={{fontWeight:500,color:x[2]?C.ac:C.tx}}>{x[1]}</span></div>; })}
+          <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginTop:4,borderTop:"2px solid "+C.brm,fontSize:15,fontWeight:700}}><span>Est. Cash to Close</span><span style={{color:C.ac}}>{fmtMoney(Math.round(cashToClose))}</span></div>
+          <div style={{background:C.s2,borderRadius:7,padding:"8px 10px",marginTop:8,fontSize:12,color:C.t2,lineHeight:1.6}}>
+            <div>Loan amount: <b>{fmtMoney(loanAmt)}</b></div>
+            <div>Est. monthly payment (P&amp;I): <b style={{color:C.tx}}>{fmtMoney(pi)}/mo</b> <span style={{color:C.t3}}>at {v.rate}% / {v.term} yr</span></div>
+            <div style={{fontSize:11,color:C.t3,marginTop:2}}>+ property tax &amp; insurance billed monthly (not included above).</div>
+          </div>
+          <Btn v="gold" onClick={function(){ setAL(true); callAI("Explain this buyer's net sheet in plain, reassuring language for "+(curLead?curLead.first:"a buyer")+": purchase price "+fmtMoney(v.price)+", "+v.downPct+"% down ("+fmtMoney(down)+"), loan "+fmtMoney(loanAmt)+", total closing costs/prepaids "+fmtMoney(costs)+", earnest "+fmtMoney(v.earnest)+", seller credit "+fmtMoney(v.sellerCredit)+", estimated cash to close "+fmtMoney(Math.round(cashToClose))+", est. monthly P&I "+fmtMoney(pi)+". Under 130 words.").then(function(t){ setAT(t); setAL(false); }); }} style={{marginTop:8}}>✨ Explain to buyer</Btn>
+          <AIBox text={aiTxt} loading={aiLd} />
+        </Card>
+      </div>
     </div>
   );
 }
