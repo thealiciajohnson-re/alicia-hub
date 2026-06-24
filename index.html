@@ -2230,24 +2230,31 @@ function PanelOH({oh,setOh}) {
 
 /* ── NET SHEET ───────────────────────────────────────────────── */
 function PanelNet({leads,setLeads}) {
-  var [v,setV] = useState({price:715000,loan:380000,lc:2.5,bc:2.5,escrow:1200,title:1800,nhd:125,warranty:600,repairs:0,other:0});
+  var DEF = {price:715000,loan:380000,lc:2.5,bc:2.5,escrow:1200,title:1800,nhd:125,warranty:600,repairs:0,other:0};
+  var [v,setV] = useState(DEF);
+  var [parties,setParties] = useState([]);
   var [leadId,setLeadId] = useState("");
   var [saveMsg,setSaveMsg] = useState("");
   function upd(k){ return function(e){ setV(function(p){ return {...p,[k]:Number(e.target.value)||0}; }); }; }
   function pickLead(e){
     var id=e.target.value; setLeadId(id); setSaveMsg("");
     var L=(leads||[]).find(function(x){ return x.id===id; });
-    if(L && L.netSheet){ setV(L.netSheet); setSaveMsg("📂 Loaded "+L.first+"'s saved net sheet"+(L.netSheetDate?" ("+fmtDate(L.netSheetDate)+")":"")+"."); }
+    if(L && L.netSheet){ setV(L.netSheet); setParties(L.netSheet.parties||[]); setSaveMsg("📂 Loaded "+L.first+"'s saved net sheet"+(L.netSheetDate?" ("+fmtDate(L.netSheetDate)+")":"")+"."); }
   }
   function saveToLead(){
     if(!leadId){ setSaveMsg("Pick a lead above to save to."); return; }
-    setLeads(function(p){ return p.map(function(l){ return l.id===leadId?{...l,netSheet:v,netSheetDate:toDay()}:l; }); });
+    var sheet = {...v, parties:parties};
+    setLeads(function(p){ return p.map(function(l){ return l.id===leadId?{...l,netSheet:sheet,netSheetDate:toDay()}:l; }); });
     var L=(leads||[]).find(function(x){ return x.id===leadId; });
     setSaveMsg("✓ Saved to "+(L?L.first+" "+L.last:"lead")+".");
   }
   var sellers = (leads||[]).filter(function(l){ return l.type==="seller"||l.type==="both"; });
   var curLead = (leads||[]).find(function(x){ return x.id===leadId; });
-  function resetSheet(){ setV({price:715000,loan:380000,lc:2.5,bc:2.5,escrow:1200,title:1800,nhd:125,warranty:600,repairs:0,other:0}); setSaveMsg("Reset to a blank sheet — change values and Save to overwrite."); }
+  function resetSheet(){ setV(DEF); setParties([]); setSaveMsg("Reset to a blank sheet — change values and Save to overwrite."); }
+  function addParty(){ setParties(function(p){ return [...p,{name:"",pct:""}]; }); }
+  function partyFld(i,k){ return function(e){ var val=e.target.value; setParties(function(p){ return p.map(function(c,j){ return j===i?{...c,[k]:val}:c; }); }); }; }
+  function delParty(i){ setParties(function(p){ return p.filter(function(c,j){ return j!==i; }); }); }
+  var totalPct = parties.reduce(function(a,c){ return a+(Number(c.pct)||0); },0);
   var lc=v.lc/100*v.price, bc=v.bc/100*v.price, tax=Math.round(v.price/1000)*1.10, net=v.price-v.loan-lc-bc-tax-v.escrow-v.title-v.nhd-v.warranty-v.repairs-v.other;
   var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
   var rows = [["Sale price",fmtMoney(v.price),false],["Loan payoff","− "+fmtMoney(v.loan),true],["Listing commission","− "+fmtMoney(Math.round(lc)),true],["Buyer commission","− "+fmtMoney(Math.round(bc)),true],["Transfer tax ($1.10/$1k)","− "+fmtMoney(Math.round(tax)),true],["Escrow","− "+fmtMoney(v.escrow),true],["Title","− "+fmtMoney(v.title),true],["NHD","− "+fmtMoney(v.nhd),true],["Warranty","− "+fmtMoney(v.warranty),true],["Repairs","− "+fmtMoney(v.repairs),true],["Other","− "+fmtMoney(v.other),true]];
@@ -2279,6 +2286,23 @@ function PanelNet({leads,setLeads}) {
           <AIBox text={aiTxt} loading={aiLd} />
         </Card>
       </div>
+      <Card title="Ownership Interests — split the net" style={{marginTop:10}}>
+        <div style={{fontSize:11,color:C.t3,marginBottom:8,lineHeight:1.5}}>If more than one person has an interest in the property (co-owners, heirs, divorcing parties, partners), add each one and their ownership %. The net proceeds split accordingly.</div>
+        {parties.map(function(c,i){
+          var share = Math.round(net * (Number(c.pct)||0)/100);
+          return <div key={i} style={{display:"flex",gap:6,alignItems:"center",marginBottom:6,flexWrap:"wrap"}}>
+            <input style={{...inp,flex:2,minWidth:130,fontSize:12}} placeholder="Owner / party name" value={c.name} onChange={partyFld(i,"name")} />
+            <input style={{...inp,width:72,fontSize:12}} type="number" step="any" placeholder="%" value={c.pct} onChange={partyFld(i,"pct")} />
+            <span style={{fontSize:14,fontWeight:700,color:C.ac,minWidth:100}}>{fmtMoney(share)}</span>
+            <span style={{color:C.ro,cursor:"pointer",fontSize:13}} onClick={function(){ delParty(i); }}>✕</span>
+          </div>;
+        })}
+        <div style={{display:"flex",gap:12,alignItems:"center",marginTop:4,flexWrap:"wrap"}}>
+          <Btn style={{fontSize:11}} onClick={addParty}>+ Add owner / interest</Btn>
+          {parties.length>0 && <span style={{fontSize:12,color:totalPct===100?C.ac:C.ro,fontWeight:600}}>Total interest: {totalPct}%{totalPct===100?" ✓":" — should equal 100%"}</span>}
+          {parties.length>0 && <span style={{fontSize:11,color:C.t3}}>Net to split: {fmtMoney(Math.round(net))}</span>}
+        </div>
+      </Card>
     </div>
   );
 }
