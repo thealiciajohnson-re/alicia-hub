@@ -2231,7 +2231,7 @@ function PanelOH({oh,setOh}) {
 
 /* ── NET SHEET ───────────────────────────────────────────────── */
 function PanelNet({leads,setLeads}) {
-  var DEF = {price:715000,loan:380000,lc:2.5,bc:2.5,cityTax:0,propTax:0,conc:0,concMode:"pct",closing:3500,repairs:0,misc:0,other:0};
+  var DEF = {price:715000,loan:380000,lc:2.5,bc:2.5,commMode:"gross",cityTax:0,propTax:0,conc:0,concMode:"pct",closing:3500,repairs:0,misc:0,other:0};
   var [v,setV] = useState(DEF);
   var [parties,setParties] = useState([]);
   var [leadId,setLeadId] = useState("");
@@ -2256,12 +2256,14 @@ function PanelNet({leads,setLeads}) {
   function partyFld(i,k){ return function(e){ var val=e.target.value; setParties(function(p){ return p.map(function(c,j){ return j===i?{...c,[k]:val}:c; }); }); }; }
   function delParty(i){ setParties(function(p){ return p.filter(function(c,j){ return j!==i; }); }); }
   var totalPct = parties.reduce(function(a,c){ return a+(Number(c.pct)||0); },0);
-  var lc=v.lc/100*v.price, bc=v.bc/100*v.price, tax=Math.round(v.price/1000)*1.10;
+  var tax=Math.round(v.price/1000)*1.10;
   var conc = (v.concMode==="amt") ? (Number(v.conc)||0) : (v.price*(Number(v.conc)||0)/100);
+  var commBase = (v.commMode==="net") ? (v.price - conc) : v.price;   // commission on gross sale price, or net of concession
+  var lc=v.lc/100*commBase, bc=v.bc/100*commBase;
   var cityTaxAmt = v.price*(Number(v.cityTax)||0)/100;
   var net = v.price - v.loan - lc - bc - tax - cityTaxAmt - (Number(v.propTax)||0) - conc - (Number(v.closing)||0) - v.repairs - (Number(v.misc)||0) - v.other;
   var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
-  var rows = [["Sale price",fmtMoney(v.price),false],["Loan balance / payoff","− "+fmtMoney(v.loan),true],["Listing commission ("+v.lc+"%)","− "+fmtMoney(Math.round(lc)),true],["Buyer commission ("+v.bc+"%)","− "+fmtMoney(Math.round(bc)),true],["County transfer tax ($1.10/$1k)","− "+fmtMoney(Math.round(tax)),true],["City transfer tax ("+(v.cityTax||0)+"%)","− "+fmtMoney(Math.round(cityTaxAmt)),true],["Property tax (proration)","− "+fmtMoney(Number(v.propTax)||0),true],["Seller concession"+(v.concMode==="pct"?" ("+(v.conc||0)+"%)":""),"− "+fmtMoney(Math.round(conc)),true],["Closing costs","− "+fmtMoney(Number(v.closing)||0),true],["Repairs","− "+fmtMoney(v.repairs),true],["Misc","− "+fmtMoney(Number(v.misc)||0),true],["Other","− "+fmtMoney(v.other),true]];
+  var rows = [["Sale price",fmtMoney(v.price),false],["Loan balance / payoff","− "+fmtMoney(v.loan),true],["Seller commission ("+v.lc+"% of "+(v.commMode==="net"?"net":"gross")+")","− "+fmtMoney(Math.round(lc)),true],["Buyer commission ("+v.bc+"% of "+(v.commMode==="net"?"net":"gross")+")","− "+fmtMoney(Math.round(bc)),true],["County transfer tax ($1.10/$1k)","− "+fmtMoney(Math.round(tax)),true],["City transfer tax ("+(v.cityTax||0)+"%)","− "+fmtMoney(Math.round(cityTaxAmt)),true],["Property tax (proration)","− "+fmtMoney(Number(v.propTax)||0),true],["Seller concession"+(v.concMode==="pct"?" ("+(v.conc||0)+"%)":""),"− "+fmtMoney(Math.round(conc)),true],["Closing costs","− "+fmtMoney(Number(v.closing)||0),true],["Repairs","− "+fmtMoney(v.repairs),true],["Misc","− "+fmtMoney(Number(v.misc)||0),true],["Other","− "+fmtMoney(v.other),true]];
   return (
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:10}}>Seller's Net Sheet</div>
@@ -2279,6 +2281,7 @@ function PanelNet({leads,setLeads}) {
         <Card title="Deal Details">
           <Row><Fld label="Sale price ($)"><input style={inp} type="number" value={v.price} onChange={upd("price")} /></Fld><Fld label="Loan balance / payoff ($)"><input style={inp} type="number" value={v.loan} onChange={upd("loan")} /></Fld></Row>
           <Row><Fld label="Seller comm (%)"><input style={inp} type="number" step=".1" value={v.lc} onChange={upd("lc")} /></Fld><Fld label="Buyer comm (%)"><input style={inp} type="number" step=".1" value={v.bc} onChange={upd("bc")} /></Fld></Row>
+          <Row><Fld label="Commission based on"><select style={inp} value={v.commMode} onChange={function(e){ var m=e.target.value; setV(function(p){ return {...p,commMode:m}; }); }}><option value="gross">Gross (sale price)</option><option value="net">Net (price − concession)</option></select></Fld><Fld label=""><span/></Fld></Row>
           <Row><Fld label="City transfer tax (%)"><input style={inp} type="number" step="any" value={v.cityTax} onChange={upd("cityTax")} /></Fld><Fld label="Property tax proration ($)"><input style={inp} type="number" value={v.propTax} onChange={upd("propTax")} /></Fld></Row>
           <Row><Fld label={"Seller concession ("+(v.concMode==="amt"?"$":"%")+")"}><input style={inp} type="number" step="any" value={v.conc} onChange={upd("conc")} /></Fld><Fld label="Concession type"><select style={inp} value={v.concMode} onChange={function(e){ var m=e.target.value; setV(function(p){ return {...p,concMode:m}; }); }}><option value="pct">% of price</option><option value="amt">$ amount</option></select></Fld></Row>
           <Row><Fld label="Closing costs ($)"><input style={inp} type="number" value={v.closing} onChange={upd("closing")} /></Fld><Fld label="Repairs ($)"><input style={inp} type="number" value={v.repairs} onChange={upd("repairs")} /></Fld></Row>
