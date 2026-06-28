@@ -102,6 +102,35 @@ function cityOf(l){
 }
 function areaOf(l){ return cityOf(l) || "Sonoma County"; }
 
+/* ── Lead de-duplication ─────────────────────────────────────── */
+function leadsMatch(a,b){
+  if(a.fubId && b.fubId && a.fubId===b.fubId) return true;
+  var ae=(a.email||"").toLowerCase().trim(), be=(b.email||"").toLowerCase().trim();
+  if(ae && be && ae===be) return true;
+  var an=((a.first||"")+" "+(a.last||"")).toLowerCase().trim(), bn=((b.first||"")+" "+(b.last||"")).toLowerCase().trim();
+  if(an && an===bn){
+    var ap=(a.phone||"").replace(/\D/g,""), bp=(b.phone||"").replace(/\D/g,"");
+    if(ap && bp && ap!==bp && ae && be && ae!==be) return false;  // same name but clearly different person
+    return true;
+  }
+  return false;
+}
+// Collapse duplicates, keeping the first (existing) record and backfilling missing fields from the dupes.
+function dedupeLeads(list){
+  var out=[];
+  (list||[]).forEach(function(l){
+    var m=-1;
+    for(var i=0;i<out.length;i++){ if(leadsMatch(out[i],l)){ m=i; break; } }
+    if(m<0){ out.push(l); return; }
+    var e=out[m];
+    out[m] = {...e, fubId:e.fubId||l.fubId, fubSynced:e.fubSynced||l.fubSynced,
+      email:e.email||l.email, email2:e.email2||l.email2, phone:e.phone||l.phone, phone2:e.phone2||l.phone2,
+      addr:e.addr||l.addr, zip:e.zip||l.zip, lc:e.lc||l.lc,
+      notes:(e.notes && l.notes && e.notes.indexOf(l.notes)<0) ? (e.notes+"\n"+l.notes) : (e.notes||l.notes)};
+  });
+  return out;
+}
+
 /* ── Recurring reminders ─────────────────────────────────────── */
 const REPLBL = { none:"One-time", weekly:"Weekly", monthly:"Monthly" };
 function nextDate(date, repeat){
@@ -477,10 +506,8 @@ function App() {
       if(d && d.people && d.people.length){
         var fresh = d.people.map(function(p){ var fd=new Date(); fd.setDate(fd.getDate()+3); return {id:uid(), first:p.first||"", last:p.last||"", phone:p.phone||"", phone2:"", email:p.email||"", email2:"", addr:"", zip:"", type:"buyer", temp:"warm", source:p.source||"Follow Up Boss", nurture:"active", timeline:"0–3 months", notes:p.notes||"", added:toDay(), fu:fd.toISOString().split("T")[0], lc:null, log:[], fubId:p.fubId, fubSynced:toDay()}; });
         setLeads(function(prev){
-          var haveId={}, haveEm={};
-          prev.forEach(function(l){ if(l.fubId) haveId[l.fubId]=1; if(l.email) haveEm[l.email.toLowerCase()]=1; });
-          var add = fresh.filter(function(l){ return !haveId[l.fubId] && !(l.email && haveEm[l.email.toLowerCase()]); });
-          return add.length ? [...add, ...prev] : prev;
+          var merged = dedupeLeads([...prev, ...fresh]);   // keep existing, fold matching FUB people in (no duplicates)
+          return merged.length===prev.length ? prev : merged;
         });
       }
     }catch(e){}
@@ -777,6 +804,11 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
       else setSendMsg("⚠️ FUB sync failed: "+((res&&res.error)||"unknown")+". (Deploy fub-push + add FUB_API_KEY.)");
     });
   }
+  function removeDupes(){
+    var d = dedupeLeads(leads); var n = leads.length - d.length;
+    if(n>0){ setLeads(d); setFubMsg("🧹 Removed "+n+" duplicate lead"+(n>1?"s":"")+" (merged their info)."); }
+    else setFubMsg("No duplicate leads found. ✓");
+  }
   function syncAllFub(){
     var todo = leads.filter(function(l){ return !l.fubId && (l.email||l.phone); });
     if(!todo.length){ setFubMsg("All leads with contact info are already in FUB."); return; }
@@ -973,6 +1005,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:14}}>
         <div style={{fontSize:18,fontWeight:700}}>All Leads <span style={{fontSize:13,fontWeight:400,color:C.t3}}>{filtered.length} of {leads.length}</span></div>
         <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+          <Btn onClick={removeDupes} style={{fontSize:11}}>🧹 Remove duplicates</Btn>
           <Btn v="sky" onClick={syncAllFub} style={{fontSize:11}}>{fubBusy?"⟳ Syncing…":"⟳ Sync all to FUB"}</Btn>
           <Btn v="sky" onClick={function(){ setFubMsg("Checking Follow Up Boss for new leads…"); if(pullFromFub) pullFromFub().then(function(){ setFubMsg("✓ Checked FUB — any new leads were added."); }); }} style={{fontSize:11}}>⟳ Check FUB for new</Btn>
           <Btn onClick={exportCSV} style={{fontSize:11}}>⬇ CSV</Btn>
