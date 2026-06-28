@@ -256,7 +256,7 @@ function Row({cols,children,mb=8}) {
 
 function AIBox({text,loading}) {
   if (!text && !loading) return null;
-  return <div style={{background:C.s2,border:"1px solid "+C.br,borderRadius:8,padding:"10px 12px",fontSize:13,lineHeight:1.75,color:C.tx,marginTop:8,whiteSpace:"pre-wrap"}}>{loading ? "⏳ Thinking…" : text}</div>;
+  return <div style={{background:"#ffffff",border:"1px solid "+C.br,borderRadius:8,padding:"10px 12px",fontSize:13,lineHeight:1.75,color:"#000000",marginTop:8,whiteSpace:"pre-wrap"}}>{loading ? "⏳ Thinking…" : text}</div>;
 }
 
 function GBar({label,actual,goal}) {
