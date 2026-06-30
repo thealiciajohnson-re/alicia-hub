@@ -557,7 +557,7 @@ function App() {
   const NAV = [
     {s:"Daily",items:[{id:"dashboard",l:"Dashboard"},{id:"calendar",l:"Today"},{id:"rems",l:"Reminders",b:pendRem}]},
     {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"}]},
-    {s:"Marketing",items:[{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
+    {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"gmail",l:"Gmail"}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"listing",l:"Listing Pres."},{id:"buyer",l:"Buyer Criteria"}]},
     {s:"Business",items:[{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"},{id:"score",l:"Scorecard"}]}
@@ -616,6 +616,7 @@ function App() {
           {tab==="actionplans" && <PanelActionPlans {...pp} />}
           {tab==="nurture"   && <PanelNurture {...pp} />}
           {tab==="listings"  && <PanelListings {...pp} />}
+          {tab==="campaigns" && <PanelCampaigns />}
           {tab==="mktgemail" && <PanelMktgEmail {...pp} />}
           {tab==="aiemail"   && <PanelAIEmail />}
           {tab==="mojo"      && <PanelMojo />}
@@ -1977,6 +1978,74 @@ function PanelMktgEmail({leads,market}) {
         {st && <div style={{fontSize:12,color:C.ac,marginTop:5}}>{st}</div>}
       </Card>
       {(ld||prev) && <Card title="Preview"><div style={{fontSize:11,color:C.t3,marginBottom:8,fontFamily:"monospace"}}>From: {AGENT.name} &lt;{AGENT.email}&gt;</div><AIBox text={prev} loading={ld} /></Card>}
+    </div>
+  );
+}
+
+/* ── CAMPAIGN CALENDAR ───────────────────────────────────────── */
+function PanelCampaigns() {
+  var [msg,setMsg] = useState("");
+  function copy(txt){
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function(){ setMsg("Copied ✓ — paste into Brevo → Campaigns"); setTimeout(function(){ setMsg(""); },2600); }, function(){ setMsg("Couldn't copy — select & copy manually."); });
+  }
+  var SIG = "Warm regards,\nAlicia Johnson | Excellerate Real Estate\n707-849-6775 | alicia@excelleraterealestate.com";
+  var WEEKS = [
+    {wk:"Week 1", theme:"📊 Market Update", purpose:"Establish expertise",
+     subj:"Your Mid-Year Sonoma County Market Update 🏡",
+     body:"Hi {{contact.FIRSTNAME}},\n\nI wanted to send a quick mid-year snapshot of the Sonoma County market — whether you're thinking about a move this year or just like to stay informed:\n\n• Median home price: ~$715,000\n• Average time on market: ~28 days\n• Active listings: ~840 and shifting\n\nWhat it means: well-priced homes are still moving quickly, and buyers have a little more selection than last year. It's a more balanced market than we've seen in a while — which creates real opportunity on both sides.\n\nIf you're curious what this means for YOUR home's value or your buying power, just reply to this email or text me at 707-849-6775 — no pressure or obligation.\n\n"+SIG,
+     note:"Update the 3 numbers with your current stats before sending."},
+    {wk:"Week 2", theme:"🏡 Seller value tip", purpose:"Wake up potential sellers",
+     subj:"Thinking of selling? 3 things that add the most value 🏡",
+     body:"Hi {{contact.FIRSTNAME}},\n\nIf selling is even maybe on your radar this year, here are the 3 things that consistently get my Sonoma County sellers the best return — without a big renovation budget:\n\n1. Fresh, neutral paint — the highest-ROI update, hands down.\n2. Deep clean + declutter — makes spaces feel bigger and move-in ready.\n3. Curb appeal — fresh mulch, trimmed landscaping, a clean entry. Buyers decide in the first 10 seconds.\n\nCurious what your home could sell for in today's market? I'll put together a free, no-obligation home value estimate for you — just reply or text me at 707-849-6775.\n\n"+SIG},
+    {wk:"Week 3", theme:"🔑 Buyer tip / financing", purpose:"Help & engage buyers",
+     subj:"The #1 thing that helps buyers win right now 🔑",
+     body:"Hi {{contact.FIRSTNAME}},\n\nIn a market where good homes still move in about a month, the buyers who win aren't always the ones with the most money — they're the ones who are ready.\n\nThe single best move, even if you're months away: get pre-approved. It tells you your real budget and lets us act fast when the right home appears. (I work with a few excellent local lenders and I'm happy to make an intro — no pressure.)\n\nThinking about buying this year? Reply and tell me what you're looking for — I'll set up a custom search so you see the right homes the moment they hit the market.\n\n"+SIG},
+    {wk:"Week 4", theme:"🌅 Local lifestyle / community", purpose:"Build local authority + replies",
+     subj:"A few of my favorite things about summer in Sonoma County 🌅",
+     body:"Hi {{contact.FIRSTNAME}},\n\nOne of the best parts of my job is helping people fall in love with where they live. A few local favorites I'm enjoying this season:\n\n• Farmers markets — Santa Rosa and Sebastopol are in full swing.\n• Russian River afternoons — perfect for a hot day.\n• Live music & winery patios — hard to beat a Sonoma County evening.\n\nWhat's your favorite local spot? Hit reply — I'm always collecting recommendations (and love hearing from you).\n\nWhether you're staying put or thinking about a move, I'm always here as your local resource.\n\n"+SIG,
+     note:"This one gets the most replies — refresh the spots each month."}
+  ];
+  var ANN = [
+    {t:"🎉 Just Sold", d:"Text me: \"closed on [address], represented [buyer/seller], [price if sharing]\" → I'll write a celebration email with a soft 'thinking of selling/buying?' CTA."},
+    {t:"🏡 New Listing", d:"Text me: address, price, beds/baths, sq ft, a standout feature, and the listing link → I'll write a 'Just Listed — private showing this week' email."},
+    {t:"📅 Open House", d:"Text me: address + date/time → I'll write an invite email to your list."}
+  ];
+  var box = {background:C.s2,border:"1px solid "+C.br,borderRadius:8,padding:"10px 12px",marginTop:8};
+  return (
+    <div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>📅 Campaign Calendar</div>
+      <div style={{fontSize:12.5,color:C.t3,marginBottom:14,lineHeight:1.5}}>One campaign email per week. Themes rotate on a 4-week cycle (repeats monthly), so you never run out of ideas. Copy any draft → paste into <b>Brevo → Campaigns</b> → send to your <b>CRM Hub Leads</b> list. When you have news (sold / new listing / open house), that week's announcement replaces the scheduled theme — just text Alicia's assistant the details.</div>
+      {msg && <div style={{fontSize:12,color:C.ac,marginBottom:10}}>{msg}</div>}
+      {WEEKS.map(function(w,i){
+        return (
+          <Card key={i}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+              <div><span style={{fontSize:11,fontWeight:700,color:C.ac,marginRight:8}}>{w.wk}</span><span style={{fontSize:15,fontWeight:700}}>{w.theme}</span><span style={{fontSize:11,color:C.t3,marginLeft:8}}>{w.purpose}</span></div>
+              <Btn v="primary" style={{fontSize:11}} onClick={function(){ copy("Subject: "+w.subj+"\n\n"+w.body); }}>📋 Copy email</Btn>
+            </div>
+            <div style={box}>
+              <div style={{fontSize:11,color:C.t3,marginBottom:3}}>SUBJECT</div>
+              <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>{w.subj}</div>
+              <div style={{fontSize:11,color:C.t3,marginBottom:3}}>BODY</div>
+              <div style={{fontSize:12.5,lineHeight:1.6,whiteSpace:"pre-wrap",color:C.tx}}>{w.body}</div>
+            </div>
+            {w.note && <div style={{fontSize:11,color:C.go,marginTop:6}}>💡 {w.note}</div>}
+          </Card>
+        );
+      })}
+      <Card title="🔔 Announcement campaigns (when you have news)">
+        <div style={{fontSize:12,color:C.t3,marginBottom:8}}>These replace that week's scheduled theme. Send Alicia's assistant the details and a same-day draft comes back.</div>
+        {ANN.map(function(a,i){ return <div key={i} style={box}><div style={{fontSize:13,fontWeight:700,marginBottom:3}}>{a.t}</div><div style={{fontSize:12,color:C.tx,lineHeight:1.5}}>{a.d}</div></div>; })}
+      </Card>
+      <Card title="✅ Sending tips">
+        <ul style={{fontSize:12.5,color:C.tx,lineHeight:1.7,margin:0,paddingLeft:18}}>
+          <li>Best days/times: <b>Tue–Thu, ~10am or ~1pm</b>.</li>
+          <li>Keep it personal and text-light — it should feel like it came from you, not a flyer.</li>
+          <li>Brevo auto-adds the unsubscribe link — leave it in (it's required by law).</li>
+          <li>The <b>{"{{contact.FIRSTNAME}}"}</b> tag fills in each person's name automatically.</li>
+          <li>Watch your <b>open rate</b> in Brevo — 25%+ is solid for real estate.</li>
+        </ul>
+      </Card>
     </div>
   );
 }
