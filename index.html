@@ -866,7 +866,11 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     setSendMsg("📬 Checking opens…");
     callBrevo("stats",{email:l.email}).then(function(res){
       if(res && res.summary){ var s=res.summary; var when=(s.lastEvent&&s.lastEvent.date)?(" (last activity "+(s.lastEvent.date+"").split("T")[0]+")"):"";
-        setSendMsg(s.opened ? ("✅ Opened"+(s.clicked?" & clicked a link":"")+when) : (s.delivered ? "📭 Delivered, not opened yet." : (s.sent ? "⏳ Sent — no events yet (opens can lag a few min)." : "No tracked Brevo emails to this address yet — send one first.")));
+        if(s.opened) setSendMsg("✅ Opened"+(s.clicked?" & clicked a link":"")+when);
+        else if(s.delivered) setSendMsg("📭 Delivered — not opened yet. Tracking will update when they open it.");
+        else if(s.sent) setSendMsg("⏳ Sent — delivery/open not logged yet (can take a few minutes). Check back shortly.");
+        else if(l.brevoSent) setSendMsg("⏳ Sent "+l.brevoSent+" — Brevo hasn't logged events yet (takes a few minutes, and 'Opened' shows only once they actually open it). Check back shortly.");
+        else setSendMsg("No tracked Brevo emails to this address yet — use 📨 Send via Brevo first.");
       } else setSendMsg("⚠️ Couldn't read stats: "+((res&&res.error)||"unknown"));
     });
   }
