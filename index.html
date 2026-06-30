@@ -349,6 +349,31 @@ async function pushToFub(lead){
   }catch(e){ return {error:String((e&&e.message)||e)}; }
 }
 
+// ── Brevo email marketing (sync contacts, send tracked emails, read opens) ──
+async function callBrevo(action, payload){
+  try{
+    var r = await fetch(SUPABASE_URL+"/functions/v1/brevo", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+SUPABASE_ANON_KEY},
+      body:JSON.stringify(Object.assign({action:action}, payload||{}))
+    });
+    return await r.json();
+  }catch(e){ return {error:String((e&&e.message)||e)}; }
+}
+function leadToBrevo(l){
+  return { email:((l.email||l.email2||"")+"").trim(), firstName:l.first||"", lastName:l.last||"", sms:((l.phone||l.phone2||"")+"").replace(/[^0-9+]/g,"") };
+}
+async function brevoSyncLead(l){
+  var c = leadToBrevo(l);
+  if(!c.email) return {error:"no email"};
+  return await callBrevo("sync", c);
+}
+// Plain text → simple safe HTML for tracked sends.
+function textToHtml(body){
+  var esc = (body||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+  return "<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#222;white-space:pre-wrap\">"+esc+"</div>";
+}
+
 function draftMsgLocal(l) {
   var name = l.first;
   var isEmail = !!l.email;
@@ -492,6 +517,10 @@ function App() {
     pushToFub(l).then(function(res){
       if(res && res.fubId) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,fubId:res.fubId,fubSynced:toDay()}:x; }); });
     });
+    // Auto-add to the Brevo email list (if it has an email)
+    if(l.email||l.email2){ brevoSyncLead(l).then(function(res){
+      if(res && res.ok) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,brevoSynced:toDay()}:x; }); });
+    }); }
   }
 
   // FUB → Hub: pull new Follow Up Boss leads into the hub (on load + every 90s).
@@ -797,6 +826,50 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   var [zipDraft,setZipDraft] = useState("");
   var [sendMsg,setSendMsg] = useState("");
   var [fubMsg,setFubMsg] = useState(""); var [fubBusy,setFubBusy] = useState(false);
+  var [brevoBusy,setBrevoBusy] = useState(false);
+  function syncOneBrevo(l){
+    setSendMsg("⟳ Adding to your Brevo email list…");
+    brevoSyncLead(l).then(function(res){
+      if(res && res.ok){ setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,brevoSynced:toDay()}:x; }); }); setModal(function(m){ return m?{...m,brevoSynced:toDay()}:m; }); setSendMsg("✓ Added to your Brevo 'CRM Hub Leads' list."); }
+      else setSendMsg("⚠️ Brevo add failed: "+((res&&res.error)||(res&&res.data&&res.data.message)||"unknown")+". (Deploy the brevo function + add BREVO_API_KEY.)");
+    });
+  }
+  function syncAllBrevo(){
+    var todo = leads.filter(function(l){ return (l.email||l.email2); });
+    if(!todo.length){ setFubMsg("No leads have an email to add to Brevo."); return; }
+    setBrevoBusy(true); setFubMsg("Adding "+todo.length+" leads to Brevo…");
+    var contacts = todo.map(function(l){ return leadToBrevo(l); });
+    callBrevo("syncBulk",{contacts:contacts}).then(function(res){
+      setBrevoBusy(false);
+      if(res && res.ok){ var day=toDay(); setLeads(function(p){ return p.map(function(x){ return (x.email||x.email2)?{...x,brevoSynced:day}:x; }); }); setFubMsg("✓ Added "+todo.length+" leads to your Brevo 'CRM Hub Leads' list. Build campaigns at brevo.com."); }
+      else setFubMsg("⚠️ Brevo bulk sync failed: "+((res&&res.error)||(res&&res.data&&res.data.message)||"unknown")+". (Deploy the brevo function + add BREVO_API_KEY.)");
+    });
+  }
+  function sendViaBrevo(l){
+    if(!l.email){ setSendMsg("No email on file — add one above first."); return; }
+    setSendMsg("📨 Sending tracked email via Brevo…");
+    var to=[{email:l.email, name:((l.first||"")+" "+(l.last||"")).trim()}];
+    callBrevo("send",{to:to, subject:emailSubject(l), html:textToHtml(curDraft(l)), senderEmail:AGENT.email, senderName:AGENT.name, replyTo:AGENT.email, tags:["crm-lead"]}).then(function(res){
+      if(res && res.messageId){
+        logContact(l,"email sent via Brevo (tracked)");
+        var day=toDay();
+        setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,brevoSent:day,brevoSynced:x.brevoSynced||day}:x; }); });
+        setModal(function(m){ return m?{...m,brevoSent:day,brevoSynced:m.brevoSynced||day}:m; });
+        if(!l.brevoSynced) brevoSyncLead(l);
+        setSendMsg("✓ Sent via Brevo — opens & clicks now track. Tap 📬 Check opens later.");
+      }
+      else setSendMsg("⚠️ Brevo send failed: "+((res&&res.error)||(res&&res.data&&res.data.message)||"unknown")+". Make sure your sender is verified in Brevo.");
+    });
+  }
+  function checkOpens(l){
+    if(!l.email){ setSendMsg("No email on file."); return; }
+    setSendMsg("📬 Checking opens…");
+    callBrevo("stats",{email:l.email}).then(function(res){
+      if(res && res.summary){ var s=res.summary; var when=(s.lastEvent&&s.lastEvent.date)?(" (last activity "+(s.lastEvent.date+"").split("T")[0]+")"):"";
+        setSendMsg(s.opened ? ("✅ Opened"+(s.clicked?" & clicked a link":"")+when) : (s.delivered ? "📭 Delivered, not opened yet." : (s.sent ? "⏳ Sent — no events yet (opens can lag a few min)." : "No tracked Brevo emails to this address yet — send one first.")));
+      } else setSendMsg("⚠️ Couldn't read stats: "+((res&&res.error)||"unknown"));
+    });
+  }
   function syncOneFub(l){
     setSendMsg("⟳ Pushing to Follow Up Boss…");
     pushToFub(l).then(function(res){
@@ -1007,6 +1080,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
         <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
           <Btn onClick={removeDupes} style={{fontSize:11}}>🧹 Remove duplicates</Btn>
           <Btn v="sky" onClick={syncAllFub} style={{fontSize:11}}>{fubBusy?"⟳ Syncing…":"⟳ Sync all to FUB"}</Btn>
+          <Btn v="primary" onClick={syncAllBrevo} style={{fontSize:11}}>{brevoBusy?"⟳ Adding…":"📨 Sync all to Brevo"}</Btn>
           <Btn v="sky" onClick={function(){ setFubMsg("Checking Follow Up Boss for new leads…"); if(pullFromFub) pullFromFub().then(function(){ setFubMsg("✓ Checked FUB — any new leads were added."); }); }} style={{fontSize:11}}>⟳ Check FUB for new</Btn>
           <Btn onClick={exportCSV} style={{fontSize:11}}>⬇ CSV</Btn>
           <Btn onClick={exportJSON} style={{fontSize:11}}>⬇ Backup</Btn>
@@ -1178,6 +1252,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
               <Btn v="gold" onClick={function(){ setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,lc:toDay(),log:[...(l.log||[]),toDay()+" — contact logged"]}:l; }); }); setModal(function(m){ return {...m,lc:toDay()}; }); }}>Log contact</Btn>
               <Btn v="sky" onClick={function(){ addToPipeline(); }}>➕ Add to Pipeline</Btn>
               <Btn v="sky" onClick={function(){ syncOneFub(modal); }}>{modal.fubId?"⟳ Update in FUB":"⟳ Push to FUB"}</Btn>
+              <Btn v="sky" onClick={function(){ syncOneBrevo(modal); }}>{modal.brevoSynced?"✓ In Brevo":"📨 Add to Brevo"}</Btn>
               {confirmDelete
                 ? <span style={{display:"inline-flex",alignItems:"center",gap:5}}>
                     <span style={{fontSize:11,color:C.ro}}>Delete?</span>
@@ -1190,10 +1265,12 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
             <AIBox text={aiTxt} loading={aiLd} />
             <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:8,borderTop:"1px solid "+C.br,paddingTop:10}}>
               <Btn v="primary" onClick={function(){ doGmail(modal); }}>📧 Email via Gmail</Btn>
+              <Btn v="gold" onClick={function(){ sendViaBrevo(modal); }}>📨 Send via Brevo (tracked)</Btn>
+              <Btn onClick={function(){ checkOpens(modal); }}>📬 Check opens</Btn>
               <Btn v="sky" onClick={function(){ doText(modal); }}>💬 Text</Btn>
               <Btn onClick={function(){ doCopy(modal); }}>📋 Copy draft</Btn>
             </div>
-            <div style={{fontSize:10.5,color:C.t3,marginTop:5}}>Opens Gmail compose signed in as <b>{AGENT.email}</b> with the draft above (built-in template if you haven't drafted one). 2nd email auto-CC'd. Tip: a Gmail tracker like Mailtrack adds read receipts.</div>
+            <div style={{fontSize:10.5,color:C.t3,marginTop:5}}><b>Gmail</b> opens compose as <b>{AGENT.email}</b> with the draft above (2nd email auto-CC'd). <b>Send via Brevo</b> sends the draft instantly and tracks opens & clicks — tap <b>📬 Check opens</b> afterward to see if they read it. (No Mailtrack needed for Brevo sends.)</div>
             {sendMsg && <div style={{fontSize:11.5,color:C.ac,marginTop:5}}>{sendMsg}</div>}
           </div>
         </div>
@@ -1928,6 +2005,17 @@ function PanelAIEmail() {
     if(!email) return;
     if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(email).then(function(){ setSt("Copied ✓"); });
   }
+  function sendBrevo() {
+    if(!email) return;
+    var to = recipient();
+    if(!to){ setSt("Add a valid email address in the To field to send via Brevo."); return; }
+    if(!(form.subject||"").trim()){ setSt("Add a subject line to send via Brevo."); return; }
+    setSt("📨 Sending tracked email via Brevo…");
+    callBrevo("send",{to:[{email:to}], subject:form.subject, html:textToHtml(email), senderEmail:AGENT.email, senderName:AGENT.name, replyTo:AGENT.email, tags:["ai-email"]}).then(function(res){
+      if(res && res.messageId) setSt("✓ Sent via Brevo to "+to+" — opens & clicks will track in your Brevo dashboard.");
+      else setSt("⚠️ Brevo send failed: "+((res&&res.error)||(res&&res.data&&res.data.message)||"unknown")+". Make sure your sender is verified in Brevo.");
+    });
+  }
   var TMPL = [["Follow-up","Write a warm, brief follow-up to a lead I've spoken with before. Reference that I enjoyed connecting, see how their home search/sale is going, and offer to help with next steps. End with an easy question."],["Cold call follow-up","Write a follow-up email after a cold call to a Sonoma County homeowner. Thank them for taking my call, briefly recap that I can help them understand their home's value and options, and offer a free no-obligation home valuation. Warm, low-pressure, ends with a soft ask to connect."],["Open house follow-up","Write a same-day open house follow-up. Thank them for stopping by, ask what they thought of the home, mention I can send similar listings or set up private showings, and invite them to reach out. Friendly and helpful."],["My credentials / intro","Write a warm introduction email establishing my credentials as a Sonoma County real estate agent with Excellerate Real Estate: local market expertise, full-service marketing, strong negotiation, and attentive communication. Build trust without bragging, and end inviting them to a quick no-pressure chat."],["Listing appt recap","Thank the seller for the listing appointment. Recap pricing strategy and staging recommendations. Confirm next steps and timeline."],["Showing recap","Summarize 3 homes toured. Ask what resonated most. Suggest next round of showings."],["Offer submitted","Tell buyer the offer is in. Explain what to expect next. Stay positive and confident."],["Price reduction","Gently recommend a price adjustment based on market feedback. Frame as a strategy to generate more activity."],["Monthly nurture","Casual monthly check-in. No pressure. Include one Sonoma County market stat."],["Market update","Send a friendly Sonoma County market update. Include median price ~$715,000, average 28 days on market, and ~840 active listings. Keep it warm, local, and helpful with a soft call to reach out."],["Just listed","Announce a new home just listed. Include placeholders for [property address], [price], [# beds], [# baths], [square footage], [standout feature], and [listing link]. Invite to a private showing this week and note homes move fast."]];
   return (
     <div>
@@ -1938,6 +2026,7 @@ function PanelAIEmail() {
         <div style={{display:"flex",gap:7,marginTop:8,flexWrap:"wrap"}}>
           <Btn v="primary" onClick={gen}>✨ Generate Email</Btn>
           {email && <Btn v="gold" onClick={sendGmail}>📧 Email via Gmail</Btn>}
+          {email && <Btn v="primary" onClick={sendBrevo}>📨 Send via Brevo (tracked)</Btn>}
           {email && <Btn onClick={copyEmail}>📋 Copy</Btn>}
         </div>
         {noKey && (
