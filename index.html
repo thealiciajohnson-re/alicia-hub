@@ -27,7 +27,7 @@ const { useState, useEffect, useRef } = React;
 const SK = {
   leads:"hub:leads2", rems:"hub:rems2", deals:"hub:deals2",
   goals:"hub:goals2", act:"hub:act2", scores:"hub:scores2",
-  txs:"hub:txs2", oh:"hub:oh2", seeded:"hub:seeded3", enrolled:"hub:enrolled2", apikey:"hub:apikey2", listings:"hub:listings2", market:"hub:market2", dismissed:"hub:dismiss2"
+  txs:"hub:txs2", oh:"hub:oh2", seeded:"hub:seeded3", enrolled:"hub:enrolled2", apikey:"hub:apikey2", listings:"hub:listings2", market:"hub:market2", dismissed:"hub:dismiss2", social:"hub:social2"
 };
 /* ── Cloud config (Supabase) ─────────────────────────────────── */
 const SUPABASE_URL = "https://mdlonovzxkpcahopwvac.supabase.co";
@@ -103,16 +103,21 @@ function cityOf(l){
 function areaOf(l){ return cityOf(l) || "Sonoma County"; }
 
 /* ── Lead de-duplication ─────────────────────────────────────── */
+function normName(x){ return (((x.first||"")+" "+(x.last||"")).toLowerCase().replace(/[^a-z0-9]+/g," ")).trim(); }
+function digitsOnly(s){ return (s||"").replace(/\D/g,""); }
 function leadsMatch(a,b){
   if(a.fubId && b.fubId && a.fubId===b.fubId) return true;
   var ae=(a.email||"").toLowerCase().trim(), be=(b.email||"").toLowerCase().trim();
-  if(ae && be && ae===be) return true;
-  var an=((a.first||"")+" "+(a.last||"")).toLowerCase().trim(), bn=((b.first||"")+" "+(b.last||"")).toLowerCase().trim();
-  if(an && an===bn){
-    var ap=(a.phone||"").replace(/\D/g,""), bp=(b.phone||"").replace(/\D/g,"");
-    if(ap && bp && ap!==bp && ae && be && ae!==be) return false;  // same name but clearly different person
+  if(ae && be && ae===be) return true;                 // same email = same person
+  var an=normName(a), bn=normName(b);
+  var ap=digitsOnly(a.phone), bp=digitsOnly(b.phone);
+  var namesConflict = an && bn && an!==bn;             // both have names and they differ
+  if(an && an===bn){                                   // same name
+    if(ap && bp && ap!==bp && ae && be && ae!==be) return false;  // clearly different contact info
     return true;
   }
+  // Same phone merges only when names don't conflict — avoids merging spouses/family who share a line.
+  if(ap && bp && ap===bp && !namesConflict) return true;
   return false;
 }
 // Collapse duplicates, keeping the first (existing) record and backfilling missing fields from the dupes.
@@ -452,6 +457,7 @@ function App() {
     ratesDate:"June 8, 2026", ratesSrc:"Freddie Mac",
     median:"$715K", dom:"28", inv:"~840", marketDate:"June 2026"
   });
+  const [social, setSocial] = useState([]);   // social content calendar (posts across platforms)
   const [dismissed, setDismissed] = useState([]);   // deleted leads (tombstones) so FUB sync won't re-add them
   const [apiKey, setApiKey] = useState("");
   const [akInput, setAkInput] = useState("");
@@ -463,8 +469,8 @@ function App() {
   useEffect(function() {
     (async function() {
       const seeded = await sget(SK.seeded);
-      const [l,r,d,g,a,sc,tx,ohg,enr,ak,lst,mkt,dis] = await Promise.all([sget(SK.leads),sget(SK.rems),sget(SK.deals),sget(SK.goals),sget(SK.act),sget(SK.scores),sget(SK.txs),sget(SK.oh),sget(SK.enrolled),sget(SK.apikey),sget(SK.listings),sget(SK.market),sget(SK.dismissed)]);
-      if (l) { setLeads(l); } else if (!seeded) { setLeads(SEEDS); await sset(SK.leads,SEEDS); await sset(SK.seeded,true); }
+      const [l,r,d,g,a,sc,tx,ohg,enr,ak,lst,mkt,dis,soc] = await Promise.all([sget(SK.leads),sget(SK.rems),sget(SK.deals),sget(SK.goals),sget(SK.act),sget(SK.scores),sget(SK.txs),sget(SK.oh),sget(SK.enrolled),sget(SK.apikey),sget(SK.listings),sget(SK.market),sget(SK.dismissed),sget(SK.social)]);
+      if (l) { setLeads(dedupeLeads(l)); } else if (!seeded) { setLeads(SEEDS); await sset(SK.leads,SEEDS); await sset(SK.seeded,true); }
       if (r) { setRems(r); } else { setRems(INIT_REMS); await sset(SK.rems,INIT_REMS); }
       if (d) { setDeals(d); } else { setDeals(INIT_DEALS); await sset(SK.deals,INIT_DEALS); }
       if (g) setGoals(g);
@@ -476,6 +482,7 @@ function App() {
       if (lst) setListings(lst);
       if (mkt) setMarket(mkt);
       if (dis) setDismissed(dis);
+      if (soc) setSocial(soc);
       if (ak) { setApiKey(ak); _ak=ak; }
       setReady(true);
     })();
@@ -505,6 +512,7 @@ function App() {
   useEffect(function(){ if (ready) sset(SK.listings,listings); }, [listings,ready]);
   useEffect(function(){ if (ready) sset(SK.market,market); }, [market,ready]);
   useEffect(function(){ if (ready) sset(SK.dismissed,dismissed); }, [dismissed,ready]);
+  useEffect(function(){ if (ready) sset(SK.social,social); }, [social,ready]);
   function dismissLead(l){ if(!l) return; setDismissed(function(p){ return [...p, {fubId:(l.fubId||null), email:(l.email||"")}]; }); }
   useEffect(function(){ if (ready && apiKey) sset(SK.apikey,apiKey); }, [apiKey,ready]);
 
@@ -536,7 +544,10 @@ function App() {
         var fresh = d.people.map(function(p){ var fd=new Date(); fd.setDate(fd.getDate()+3); return {id:uid(), first:p.first||"", last:p.last||"", phone:p.phone||"", phone2:"", email:p.email||"", email2:"", addr:"", zip:"", type:"buyer", temp:"warm", source:p.source||"Follow Up Boss", nurture:"active", timeline:"0–3 months", notes:p.notes||"", added:toDay(), fu:fd.toISOString().split("T")[0], lc:null, log:[], fubId:p.fubId, fubSynced:toDay()}; });
         setLeads(function(prev){
           var merged = dedupeLeads([...prev, ...fresh]);   // keep existing, fold matching FUB people in (no duplicates)
-          return merged.length===prev.length ? prev : merged;
+          // Persist whenever anything changed — a new lead OR a backfilled field (e.g. fubId)
+          // on an existing lead. (The old length-only check silently dropped backfills, so
+          // leads never learned their FUB id and kept getting re-pulled as duplicates.)
+          return JSON.stringify(merged)===JSON.stringify(prev) ? prev : merged;
         });
       }
     }catch(e){}
@@ -553,17 +564,18 @@ function App() {
   const pendRem = rems.filter(function(r){ return !r.done; }).length;
   const dueToday = leads.filter(function(l){ return l.fu && l.fu <= toDay(); }).length;
   const nurtureDueN = leads.filter(nurtureDue).length;
+  const socialDueN = social.filter(function(p){ return p.status!=="posted" && p.date && p.date <= toDay(); }).length;
 
   const NAV = [
     {s:"Daily",items:[{id:"dashboard",l:"Dashboard"},{id:"calendar",l:"Today"},{id:"rems",l:"Reminders",b:pendRem}]},
     {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"}]},
-    {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
+    {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"gmail",l:"Gmail"}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"listing",l:"Listing Pres."},{id:"buyer",l:"Buyer Criteria"}]},
     {s:"Business",items:[{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"},{id:"score",l:"Scorecard"}]}
   ];
 
-  const pp = {leads,rems,deals,act,goals,scores,txs,oh,enrolled,listings,setListings,market,setMarket,setTab,setLeads,setRems,setDeals,setGoals,setAct,setScores,setTxs,setOh,setEnrolled,addLead,focusLead,setFocusLead,pullFromFub,dismissLead};
+  const pp = {leads,rems,deals,act,goals,scores,txs,oh,enrolled,listings,setListings,market,setMarket,social,setSocial,setTab,setLeads,setRems,setDeals,setGoals,setAct,setScores,setTxs,setOh,setEnrolled,addLead,focusLead,setFocusLead,pullFromFub,dismissLead};
 
   return (
     <div style={{fontFamily:"'DM Sans',system-ui,sans-serif",background:C.bg,minHeight:"100vh",fontSize:14,color:C.tx}}>
@@ -617,6 +629,7 @@ function App() {
           {tab==="nurture"   && <PanelNurture {...pp} />}
           {tab==="listings"  && <PanelListings {...pp} />}
           {tab==="campaigns" && <PanelCampaigns />}
+          {tab==="social"    && <PanelSocial {...pp} />}
           {tab==="mktgemail" && <PanelMktgEmail {...pp} />}
           {tab==="aiemail"   && <PanelAIEmail />}
           {tab==="mojo"      && <PanelMojo />}
@@ -1983,6 +1996,163 @@ function PanelMktgEmail({leads,market}) {
 }
 
 /* ── CAMPAIGN CALENDAR ───────────────────────────────────────── */
+/* ── SOCIAL STUDIO ───────────────────────────────────────────── */
+// buffer:true = channel is connected in Alicia's Buffer account (publish.buffer.com).
+const SOCIAL_PLATFORMS = [
+  {id:"instagram", l:"Instagram", ic:"📸", col:"#c13584", buffer:true},
+  {id:"tiktok",    l:"TikTok",     ic:"🎵", col:"#010101", buffer:true},
+  {id:"facebook",  l:"Facebook",  ic:"👍", col:"#1877f2"},
+  {id:"linkedin",  l:"LinkedIn",  ic:"💼", col:"#0a66c2"},
+  {id:"youtube",   l:"YouTube",    ic:"▶️", col:"#ff0000"},
+  {id:"gbp",       l:"Google Biz", ic:"🔎", col:"#34a853"}
+];
+const BUFFER_URL = "https://publish.buffer.com/";
+const SOCIAL_TOPICS = [
+  {k:"market",    l:"📊 Market stat",   p:"a Sonoma County market-update post with one striking stat (median price ~$715K, ~28 days on market, or ~840 active listings) and what it means for buyers/sellers"},
+  {k:"listing",   l:"🏡 New listing",   p:"a 'Just Listed' teaser post for a Santa Rosa / Sonoma County home — build excitement, invite DMs for a private showing"},
+  {k:"lifestyle", l:"🌅 Local lifestyle",p:"a warm local-lifestyle post about living in Sonoma County this season (farmers markets, Russian River, wineries) that builds local authority and invites replies"},
+  {k:"tip",       l:"💡 Buyer/seller tip",p:"a quick, genuinely useful home buyer or seller tip for the Sonoma County market"},
+  {k:"testimonial",l:"⭐ Client story", p:"a soft social-proof post celebrating a recent happy client (keep it generic/anonymized) with a gentle CTA"},
+  {k:"soldjust",  l:"🎉 Just sold",     p:"a 'Just Sold' celebration post with a subtle 'thinking of selling?' call to action"}
+];
+const SOCIAL_STATUS = {
+  idea:      {l:"Idea",      bg:C.s2,  tx:C.t2, bd:C.brm},
+  scheduled: {l:"Scheduled", bg:C.gL,  tx:C.go, bd:C.gB},
+  posted:    {l:"Posted",    bg:C.aL,  tx:C.ac, bd:C.aB}
+};
+
+function PanelSocial({social,setSocial}) {
+  var [platform,setPlatform] = useState("instagram");
+  var [topic,setTopic] = useState(SOCIAL_TOPICS[0].k);
+  var [extra,setExtra] = useState("");
+  var [draft,setDraft] = useState("");
+  var [ld,setLd] = useState(false);
+  var [st,setSt] = useState("");
+  var [msg,setMsg] = useState("");
+
+  function flash(m){ setMsg(m); setTimeout(function(){ setMsg(""); }, 2600); }
+  function copy(txt){
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function(){ flash("Copied ✓ — paste into Buffer / Metricool"); }, function(){ flash("Couldn't copy — select manually."); });
+  }
+  // Copy the caption and open Buffer, where Alicia attaches her photo/video and schedules.
+  // (Instagram & TikTok require media, so the post is always finished inside Buffer.)
+  function sendToBuffer(txt, platId){
+    var plat = SOCIAL_PLATFORMS.find(function(x){ return x.id===platId; });
+    if(plat && !plat.buffer){ flash("Connect "+plat.l+" in Buffer first (publish.buffer.com) — opening Buffer…"); }
+    else { flash("Caption copied ✓ — in Buffer: paste, add your photo/video, pick a time"); }
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
+    window.open(BUFFER_URL, "_blank", "noopener");
+  }
+  function gen(){
+    var t = SOCIAL_TOPICS.find(function(x){ return x.k===topic; }) || SOCIAL_TOPICS[0];
+    var plat = SOCIAL_PLATFORMS.find(function(x){ return x.id===platform; }) || SOCIAL_PLATFORMS[0];
+    setLd(true); setDraft(""); setSt("");
+    callAI("Write "+t.p+". Platform: "+plat.l+". Voice: "+AGENT.name+", "+AGENT.co+", "+AGENT.city+" — warm, upbeat, professional, not salesy. "+(extra?("Extra detail to include: "+extra+". "):"")+"Keep it tight for social ("+(plat.id==="linkedin"?"up to ~120 words":"under ~60 words")+"). Add 2–4 relevant local hashtags at the end (e.g. #SonomaCounty #SantaRosaRealEstate). Return only the post text, ready to paste.").then(function(txt){
+      var bad = !txt || txt.indexOf("⚠️")===0 || txt.indexOf("API error")===0 || txt.indexOf("Fetch error")===0;
+      if(bad){ setSt(txt||"AI error — check your key."); } else { setDraft(txt); }
+      setLd(false);
+    });
+  }
+  function saveDraft(status){
+    if(!draft.trim()){ setSt("Generate or write a post first."); return; }
+    var post = {id:uid(), platform:platform, topic:topic, text:draft.trim(), date:toDay(), status:status||"idea", created:toDay()};
+    setSocial(function(p){ return [post,...(p||[])]; });
+    setDraft(""); setExtra(""); flash("Saved to your calendar ✓");
+  }
+  function update(id,patch){ setSocial(function(p){ return p.map(function(x){ return x.id===id?{...x,...patch}:x; }); }); }
+  function del(id){ setSocial(function(p){ return p.filter(function(x){ return x.id!==id; }); }); }
+
+  var list = (social||[]).slice().sort(function(a,b){ return (a.date<b.date?1:-1); });
+  var counts = {idea:0,scheduled:0,posted:0};
+  list.forEach(function(p){ if(counts[p.status]!==undefined) counts[p.status]++; });
+  var selBtn = function(active){ return {padding:"6px 10px",borderRadius:7,fontSize:12,cursor:"pointer",fontWeight:active?600:500,border:"1px solid "+(active?C.ac:C.brm),background:active?C.aL:C.sur,color:active?C.ac:C.t2}; };
+
+  return (
+    <div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>📱 Social Studio</div>
+      <div style={{fontSize:12.5,color:C.t3,marginBottom:14,lineHeight:1.5}}>Plan and draft posts for every platform in one place, then push them out with your scheduler. Everything here saves to your account and syncs across your devices.</div>
+      {msg && <div style={{fontSize:12,color:C.ac,marginBottom:10,fontWeight:600}}>{msg}</div>}
+
+      {/* Recommended toolkit */}
+      <Card title="🔗 Your posting toolkit">
+        <div style={{fontSize:12.5,color:C.tx,lineHeight:1.6,marginBottom:8}}>Draft here → <b>📤 Send to Buffer</b> (copies your caption & opens Buffer) → add your photo/video and pick a time → automate replies. Recommended combo:</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div style={{background:C.s2,border:"1px solid "+C.br,borderRadius:8,padding:"9px 11px"}}>
+            <div style={{fontSize:12.5,fontWeight:700,marginBottom:2}}>📤 Publish · Buffer <span style={{fontSize:10,fontWeight:600,color:C.ac,background:C.aL,border:"1px solid "+C.aB,borderRadius:20,padding:"1px 6px"}}>connected</span></div>
+            <div style={{fontSize:11.5,color:C.t2,lineHeight:1.5}}>Your Buffer has <b>Instagram</b> &amp; <b>TikTok</b> connected. The <b>Send to Buffer</b> buttons copy the caption and open Buffer — just add media and schedule. Add Facebook/LinkedIn in Buffer to post there too.</div>
+          </div>
+          <div style={{background:C.s2,border:"1px solid "+C.br,borderRadius:8,padding:"9px 11px"}}>
+            <div style={{fontSize:12.5,fontWeight:700,marginBottom:2}}>🤖 Auto-reply to comments/DMs</div>
+            <div style={{fontSize:11.5,color:C.t2,lineHeight:1.5}}><b>ManyChat</b> — keyword auto-replies (comment "INFO" → auto-DM a listing or lead form). The safe, lead-capturing way to automate engagement.</div>
+          </div>
+        </div>
+        <div style={{fontSize:11,color:C.go,marginTop:8,lineHeight:1.5}}>💡 Instagram &amp; TikTok require a photo or video, so the post is always finished in Buffer. Best times: <b>Tue–Thu ~11am–1pm &amp; 6–8pm</b>. Post 3–5×/week and reply to every real comment within a few hours — the algorithms reward it.</div>
+      </Card>
+
+      {/* AI composer */}
+      <Card title="✨ AI post composer">
+        <div style={{fontSize:11,color:C.t3,marginBottom:4,fontWeight:600}}>PLATFORM <span style={{fontWeight:400,textTransform:"none"}}>· <span style={{color:C.ac}}>✓</span> = connected in your Buffer</span></div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+          {SOCIAL_PLATFORMS.map(function(p){ return <div key={p.id} onClick={function(){ setPlatform(p.id); }} style={selBtn(platform===p.id)}>{p.ic} {p.l}{p.buffer && <span style={{color:C.ac,marginLeft:4,fontWeight:700}}>✓</span>}</div>; })}
+        </div>
+        <div style={{fontSize:11,color:C.t3,marginBottom:4,fontWeight:600}}>TOPIC</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+          {SOCIAL_TOPICS.map(function(t){ return <div key={t.k} onClick={function(){ setTopic(t.k); }} style={selBtn(topic===t.k)}>{t.l}</div>; })}
+        </div>
+        <Fld label="Anything specific to include? (optional)">
+          <input style={inp} placeholder="e.g. address, price, open house Sat 1–3pm, a fun fact…" value={extra} onChange={function(e){ setExtra(e.target.value); }} />
+        </Fld>
+        <div style={{display:"flex",gap:8,marginTop:10}}>
+          <Btn v="primary" onClick={gen}>✨ Generate post</Btn>
+          {draft && <Btn onClick={function(){ setDraft(""); }}>Clear</Btn>}
+        </div>
+        {st && <div style={{fontSize:12,color:C.ro,marginTop:8}}>{st}</div>}
+        {(ld||draft) && (
+          ld ? <AIBox loading={true} /> :
+          <div style={{marginTop:10}}>
+            <textarea style={{...inp,minHeight:110,lineHeight:1.6,resize:"vertical"}} value={draft} onChange={function(e){ setDraft(e.target.value); }} />
+            <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}}>
+              <Btn v="primary" onClick={function(){ saveDraft("scheduled"); sendToBuffer(draft, platform); }}>📤 Send to Buffer</Btn>
+              <Btn onClick={function(){ saveDraft("scheduled"); }}>📅 Save to calendar</Btn>
+              <Btn onClick={function(){ saveDraft("idea"); }}>💡 Save as idea</Btn>
+              <Btn onClick={function(){ copy(draft); }}>📋 Copy</Btn>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Content calendar */}
+      <Card title={"🗓️ Content calendar — "+list.length+" post"+(list.length===1?"":"s")+"  ·  "+counts.idea+" ideas · "+counts.scheduled+" scheduled · "+counts.posted+" posted"}>
+        {list.length===0 ? (
+          <div style={{color:C.t3,fontSize:13,textAlign:"center",padding:18}}>No posts yet. Use the composer above to draft your first one.</div>
+        ) : list.map(function(p){
+          var plat = SOCIAL_PLATFORMS.find(function(x){ return x.id===p.platform; }) || SOCIAL_PLATFORMS[0];
+          var stt = SOCIAL_STATUS[p.status] || SOCIAL_STATUS.idea;
+          return (
+            <div key={p.id} style={{border:"1px solid "+C.br,borderRadius:9,padding:"10px 12px",marginBottom:8,background:C.sur}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
+                <span style={{fontSize:12,fontWeight:700,color:plat.col}}>{plat.ic} {plat.l}</span>
+                <span style={{display:"inline-flex",fontSize:10.5,padding:"1px 8px",borderRadius:20,fontWeight:600,background:stt.bg,color:stt.tx,border:"1px solid "+stt.bd}}>{stt.l}</span>
+                <input type="date" value={p.date} onChange={function(e){ update(p.id,{date:e.target.value}); }} style={{...inp,width:"auto",padding:"3px 7px",fontSize:11}} />
+                <div style={{flex:1}} />
+                <span style={{fontSize:11,color:C.t3}}>{fmtDate(p.date)}</span>
+              </div>
+              <div style={{fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",color:C.tx,marginBottom:8}}>{p.text}</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                <Btn v="primary" onClick={function(){ sendToBuffer(p.text, p.platform); update(p.id,{status:"scheduled"}); }} style={{fontSize:11}}>📤 Send to Buffer</Btn>
+                {p.status!=="posted" && <Btn onClick={function(){ update(p.id,{status:"posted"}); }} style={{fontSize:11}}>✓ Mark posted</Btn>}
+                {p.status==="posted" && <Btn onClick={function(){ update(p.id,{status:"idea"}); }} style={{fontSize:11}}>↩ Reopen</Btn>}
+                <Btn onClick={function(){ copy(p.text); }} style={{fontSize:11}}>📋 Copy</Btn>
+                <Btn v="rose" onClick={function(){ del(p.id); }} style={{fontSize:11}}>Delete</Btn>
+              </div>
+            </div>
+          );
+        })}
+      </Card>
+    </div>
+  );
+}
+
 function PanelCampaigns() {
   var [msg,setMsg] = useState("");
   function copy(txt){
