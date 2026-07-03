@@ -654,7 +654,7 @@ function App() {
     {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"}]},
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN},{id:"gmail",l:"Gmail"}]},
-    {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"listing",l:"Listing Pres."},{id:"buyer",l:"Buyer Criteria"}]},
+    {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
     {s:"Business",items:[{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"},{id:"score",l:"Scorecard"}]}
   ];
 
@@ -727,7 +727,6 @@ function App() {
           {tab==="net"       && <PanelNet {...pp} />}
           {tab==="buyernet"  && <PanelBuyerNet {...pp} />}
           {tab==="tx"        && <PanelTx {...pp} />}
-          {tab==="listing"   && <PanelListing {...pp} />}
           {tab==="buyer"     && <PanelBuyer {...pp} />}
           {tab==="rates"     && <PanelRates {...pp} />}
           {tab==="market"    && <PanelMarket {...pp} />}
@@ -1505,9 +1504,13 @@ function PanelPipeline({deals,setDeals,setAct,leads}) {
     setAct(function(p){ return {...p,listings:p.listings+1}; });
     setForm({addr:"",client:"",type:"Listing",price:"",closeDate:"",leadId:""}); setShow(false);
   }
+  var [showClosed,setShowClosed] = useState(true);
   function setStage(id,st) {
-    setDeals(function(p){ return p.map(function(d){ return d.id===id?{...d,stage:st}:d; }); });
-    if (st===4) setAct(function(p){ return {...p,closed:p.closed+1}; });
+    var d0 = (deals||[]).find(function(x){ return x.id===id; });
+    var wasClosed = d0 && d0.stage===4;
+    setDeals(function(p){ return p.map(function(d){ return d.id===id?{...d,stage:st,closedDate:(st===4?(d.closedDate||toDay()):d.closedDate)}:d; }); });
+    if (st===4 && !wasClosed) setAct(function(p){ return {...p,closed:p.closed+1}; });
+    else if (st!==4 && wasClosed) setAct(function(p){ return {...p,closed:Math.max(0,p.closed-1)}; });
   }
   return (
     <div>
@@ -1525,21 +1528,54 @@ function PanelPipeline({deals,setDeals,setAct,leads}) {
           <Btn v="primary" onClick={save}>Add Deal</Btn>
         </Card>
       )}
-      {deals.length===0 ? <div style={{color:C.t3,fontSize:13,marginTop:10}}>No deals yet.</div> : deals.map(function(d){
+      {(function(){
+        var active = (deals||[]).filter(function(d){ return d.stage!==4; });
+        var closed = (deals||[]).filter(function(d){ return d.stage===4; });
         return (
-          <Card key={d.id} style={{marginTop:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-              <div style={{flex:1}}><div style={{fontSize:14,fontWeight:600}}>{d.addr}</div><div style={{fontSize:12,color:C.t2}}>{d.client} · {d.type}{d.price?" · "+fmtMoney(d.price):""}{d.closeDate?" · Est. close "+fmtDate(d.closeDate):""}</div></div>
-              <Tag t="warm">{DSTAGES[d.stage]}</Tag>
-            </div>
-            <div style={{display:"flex",gap:4}}>
-              {DSTAGES.map(function(s,si){
-                return <div key={si} style={{flex:1,textAlign:"center",padding:"5px 2px",fontSize:11,borderRadius:6,cursor:"pointer",fontWeight:si===d.stage?600:400,background:si<d.stage?C.aL:si===d.stage?C.gL:C.s2,border:"1px solid "+(si<d.stage?C.aB:si===d.stage?C.gB:C.br),color:si<d.stage?C.ac:si===d.stage?C.go:C.t3}} onClick={function(){ setStage(d.id,si); }}>{s}</div>;
-              })}
-            </div>
-          </Card>
+          <div>
+            {deals.length===0 ? <div style={{color:C.t3,fontSize:13,marginTop:10}}>No deals yet.</div> : null}
+            {/* Active deals */}
+            {active.map(function(d){
+              return (
+                <Card key={d.id} style={{marginTop:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                    <div style={{flex:1}}><div style={{fontSize:14,fontWeight:600}}>{d.addr}</div><div style={{fontSize:12,color:C.t2}}>{d.client} · {d.type}{d.price?" · "+fmtMoney(d.price):""}{d.closeDate?" · Est. close "+fmtDate(d.closeDate):""}</div></div>
+                    <Tag t="warm">{DSTAGES[d.stage]}</Tag>
+                  </div>
+                  <div style={{display:"flex",gap:4}}>
+                    {DSTAGES.map(function(s,si){
+                      return <div key={si} style={{flex:1,textAlign:"center",padding:"5px 2px",fontSize:11,borderRadius:6,cursor:"pointer",fontWeight:si===d.stage?600:400,background:si<d.stage?C.aL:si===d.stage?C.gL:C.s2,border:"1px solid "+(si<d.stage?C.aB:si===d.stage?C.gB:C.br),color:si<d.stage?C.ac:si===d.stage?C.go:C.t3}} onClick={function(){ setStage(d.id,si); }}>{s}</div>;
+                    })}
+                  </div>
+                </Card>
+              );
+            })}
+            {/* Closed deals — moved out of the active pipeline */}
+            {closed.length>0 && (
+              <div style={{marginTop:18}}>
+                <div onClick={function(){ setShowClosed(function(p){ return !p; }); }} style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",borderTop:"2px solid "+C.br,paddingTop:14,marginBottom:4}}>
+                  <div style={{fontSize:15,fontWeight:700}}>✅ Closed Deals <span style={{fontSize:12,fontWeight:400,color:C.t3}}>{closed.length}</span></div>
+                  <span style={{marginLeft:"auto",fontSize:12,color:C.t3}}>{showClosed?"▾ hide":"▸ show"}</span>
+                </div>
+                {showClosed && closed.map(function(d){
+                  return (
+                    <Card key={d.id} style={{marginTop:8,background:C.aL,border:"1px solid "+C.aB}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:14,fontWeight:600}}>{d.addr}</div>
+                          <div style={{fontSize:12,color:C.t2}}>{d.client} · {d.type}{d.price?" · "+fmtMoney(d.price):""}{d.closedDate?" · Closed "+fmtDate(d.closedDate):""}</div>
+                        </div>
+                        <Tag t="hot">✅ Closed</Tag>
+                        <Btn style={{fontSize:10,padding:"3px 8px"}} onClick={function(){ setStage(d.id,3); }} title="Move back to In Escrow">↩ Reopen</Btn>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         );
-      })}
+      })()}
     </div>
   );
 }
@@ -2971,8 +3007,10 @@ function txCommission(tx){
   var basis = tx.basis==="net" ? "net" : "gross";
   var base = (basis==="net" && Number(tx.netPrice)>0) ? Number(tx.netPrice) : (Number(tx.price)||0);
   var grossComm = base ? Math.round(base*comm/100) : 0;
-  var netComm = Math.round(grossComm*split/100);
-  return { base:base, basis:basis, comm:comm, split:split, grossComm:grossComm, netComm:netComm };
+  var calcNet = Math.round(grossComm*split/100);        // payout from the split formula
+  var hasOverride = (tx.payout!==undefined && tx.payout!==null && tx.payout!=="");  // manual payout entered
+  var netComm = hasOverride ? Number(tx.payout) : calcNet;
+  return { base:base, basis:basis, comm:comm, split:split, grossComm:grossComm, calcNet:calcNet, netComm:netComm, overridden:hasOverride };
 }
 
 function PanelTx({txs,setTxs}) {
@@ -3034,12 +3072,8 @@ function PanelTx({txs,setTxs}) {
         </Card>
       )}
       {txs.length===0 ? <div style={{color:C.t3,fontSize:13,marginTop:8}}>No transactions yet.</div> : txs.map(function(tx){
-        var comm = Number(tx.comm)||2.5;
-        var split = (tx.split===0||tx.split) ? Number(tx.split) : 80;
-        var basis = tx.basis==="net" ? "net" : "gross";
-        var base = (basis==="net" && Number(tx.netPrice)>0) ? Number(tx.netPrice) : tx.price;
-        var grossComm = base ? Math.round(base * comm / 100) : 0;
-        var netComm = Math.round(grossComm * split / 100);
+        var cc = txCommission(tx);
+        var comm=cc.comm, split=cc.split, basis=cc.basis, base=cc.base, grossComm=cc.grossComm, netComm=cc.netComm, calcNet=cc.calcNet, overridden=cc.overridden;
         return (
           <Card key={tx.id} style={{marginTop:8}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
@@ -3071,12 +3105,24 @@ function PanelTx({txs,setTxs}) {
                   <div style={{fontSize:11,fontWeight:700,color:C.t3,textTransform:"uppercase",letterSpacing:".06em",minWidth:78}}>Your split</div>
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
                     <input type="number" step="1" min="0" max="100" value={split} onChange={function(e){ updTx(tx.id,"split",Number(e.target.value)||0); }} style={{...inp,width:62,fontSize:13,fontWeight:600,textAlign:"right"}} />
-                    <span style={{fontSize:13,color:C.t2}}>%  to you  ·  brokerage keeps {fmtMoney(grossComm-netComm)}</span>
+                    <span style={{fontSize:13,color:C.t2}}>%  to you  ·  brokerage keeps {fmtMoney(grossComm-calcNet)}</span>
                   </div>
-                  <div style={{fontSize:17,fontWeight:700,color:C.ac,marginLeft:"auto"}}>= {fmtMoney(netComm)}</div>
+                  <div style={{fontSize:17,fontWeight:700,color:C.t2,marginLeft:"auto"}}>= {fmtMoney(calcNet)}</div>
+                </div>
+                {/* Editable actual payout — overrides the calculated split for fees, referrals, caps, bonuses */}
+                <div style={{borderTop:"1px solid "+C.aB,marginTop:8,paddingTop:8,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:C.t3,textTransform:"uppercase",letterSpacing:".06em",minWidth:78}}>Your payout</div>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:14,color:C.ac,fontWeight:700}}>$</span>
+                    <input type="number" step="1" min="0" value={overridden ? tx.payout : ""} placeholder={String(calcNet)} onChange={function(e){ var val=e.target.value; updTx(tx.id,"payout", val===""?"":(Number(val)||0)); }} style={{...inp,width:120,fontSize:15,fontWeight:700,textAlign:"right",color:C.ac}} />
+                  </div>
+                  {overridden
+                    ? <Btn style={{fontSize:10,padding:"3px 8px"}} onClick={function(){ updTx(tx.id,"payout",""); }}>↺ Use calculated ({fmtMoney(calcNet)})</Btn>
+                    : <span style={{fontSize:10.5,color:C.t3}}>edit to override the calculated split (fees, referral, cap, bonus)</span>}
+                  <span style={{fontSize:15,fontWeight:700,color:C.ac,marginLeft:"auto"}}>{fmtMoney(netComm)}{overridden && <span style={{fontSize:10,color:C.go,marginLeft:4}}>edited</span>}</span>
                 </div>
                 <div style={{borderTop:"1px solid "+C.aB,marginTop:8,paddingTop:8,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                  <span style={{fontSize:11,fontWeight:700,color:C.t3,textTransform:"uppercase",letterSpacing:".06em"}}>Payout</span>
+                  <span style={{fontSize:11,fontWeight:700,color:C.t3,textTransform:"uppercase",letterSpacing:".06em"}}>Status</span>
                   <Btn v={tx.paid?"primary":"def"} style={{fontSize:11}} onClick={function(){ setTxs(function(p){ return p.map(function(t){ return t.id===tx.id?{...t,paid:!t.paid,paidDate:(!t.paid?toDay():t.paidDate)}:t; }); }); }}>{tx.paid?("✓ Paid"+(tx.paidDate?" "+fmtDate(tx.paidDate):"")):"Mark paid"}</Btn>
                   <span style={{fontSize:12,fontWeight:600,color:tx.paid?C.ac:C.go,marginLeft:"auto"}}>{tx.paid?"Received":"Outstanding "+fmtMoney(netComm)}</span>
                 </div>
