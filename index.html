@@ -67,11 +67,19 @@ const fmtDate = d => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US",{m
 
 const AGENT = {
   name: "Alicia Johnson",
+  title: "Realtor",
+  lic: "02272644",
   co: "Excellerate Real Estate",
   city: "Santa Rosa, CA",
   phone: "707-849-6775",
-  email: "alicia@excelleraterealestate.com"
+  email: "alicia@excelleraterealestate.com",
+  web1: "https://thealiciajohnsonhomes.com/",
+  web2: "https://excelleraterealestate.com/",
+  photo: "https://photos.zillowstatic.com/fp/1896d8d0e6244cbbde5af305ddebfba2-h_l.jpg"   // Zillow-hosted headshot for email header (blank = "AJ" monogram)
 };
+
+// Bump this whenever the hub is updated, so you can confirm you're viewing the latest file.
+const BUILD = "Jul 2 · build 7";
 
 const TICON = { hot:"🔥", warm:"🌤", cold:"❄️" };
 const NLBL = { active:"Active","long-term":"Long-term",drip:"Drip",monthly:"Monthly",quarterly:"Quarterly",none:"None" };
@@ -90,6 +98,25 @@ function nurtureNext(l){
   if (!l.lastNurtured) return toDay();
   var d = new Date(l.lastNurtured+"T12:00:00"); d.setDate(d.getDate()+NURDAYS[l.autoNurture]);
   return d.toISOString().split("T")[0];
+}
+
+/* ── Home-closing anniversaries (yearly "happy anniversary" emails) ── */
+function daysUntil(d){ if(!d) return null; var t=new Date(d+"T12:00:00"); if(isNaN(t)) return null; return Math.round((t-new Date(toDay()+"T12:00:00"))/86400000); }
+// The next yearly anniversary of a lead's home-closing date (today or in the future).
+function nextAnniversary(closeDate){
+  if(!closeDate) return null;
+  var c=new Date(closeDate+"T12:00:00"); if(isNaN(c)) return null;
+  var today=new Date(toDay()+"T12:00:00");
+  var a=new Date(c); a.setFullYear(today.getFullYear());
+  if(a<today) a.setFullYear(today.getFullYear()+1);
+  return a.toISOString().split("T")[0];
+}
+// How many years since closing, as of the given anniversary date (defaults to next one).
+function anniversaryYears(closeDate, onDate){
+  if(!closeDate) return 0;
+  var c=new Date(closeDate+"T12:00:00"), o=new Date((onDate||nextAnniversary(closeDate)||toDay())+"T12:00:00");
+  if(isNaN(c)||isNaN(o)) return 0;
+  return Math.max(0, o.getFullYear()-c.getFullYear());
 }
 
 // Pull the lead's city from their address ("507 Alta Ave, Rohnert Park, CA 94928" -> "Rohnert Park")
@@ -378,6 +405,41 @@ function textToHtml(body){
   var esc = (body||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
   return "<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#222;white-space:pre-wrap\">"+esc+"</div>";
 }
+// Branded HTML email template — green header w/ "AJ" mark, body paragraphs, signature footer.
+// Reusable for any hub email; the body should NOT include a sign-off (the footer supplies it).
+function brandedEmailHtml(body, headline, opts){
+  opts = opts || {};
+  var esc = function(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+  var digits = function(s){ return (s||"").split("").filter(function(ch){ return "0123456789+".indexOf(ch)>=0; }).join(""); };
+  var paras = (body||"").split(/\n\n+/).map(function(p){ return "<p style=\"margin:0 0 14px\">"+esc(p).replace(/\n/g,"<br>")+"</p>"; }).join("");
+  var mark = AGENT.photo
+    ? "<img src=\""+esc(AGENT.photo)+"\" width=\"48\" height=\"48\" alt=\""+esc(AGENT.name)+"\" style=\"width:48px;height:48px;border-radius:50%;object-fit:cover;display:block;border:2px solid #ffffff\" />"
+    : "<div style=\"width:44px;height:44px;background:#ffffff;border-radius:10px;color:#1b4f3a;font-weight:bold;font-size:16px;text-align:center;line-height:44px\">AJ</div>";
+  var webHost = function(u){ u=((u||"").split("//").pop()); if(u.slice(-1)==="/") u=u.slice(0,-1); return u; };
+  // Footer signature — omit with {footer:false} for emails whose body already signs off.
+  var footer = (opts.footer===false) ? "" : (""
+    + "<div style=\"padding:14px 24px 22px;margin-top:8px;border-top:1px solid #eeeeee;font-size:12px;color:#666666;line-height:1.7\">"
+    +   "<div style=\"font-weight:bold;color:#1b4f3a;font-size:13px\">"+esc(AGENT.name)+"</div>"
+    +   esc(AGENT.title)+" &middot; Lic. # "+esc(AGENT.lic)+"<br>"
+    +   esc(AGENT.co)+"<br>"
+    +   "<a href=\"tel:"+esc(digits(AGENT.phone))+"\" style=\"color:#666666;text-decoration:none\">"+esc(AGENT.phone)+"</a> &middot; <a href=\"mailto:"+esc(AGENT.email)+"\" style=\"color:#1b4f3a\">"+esc(AGENT.email)+"</a><br>"
+    +   "<a href=\""+esc(AGENT.web1)+"\" style=\"color:#1b4f3a\">"+esc(webHost(AGENT.web1))+"</a> &middot; <a href=\""+esc(AGENT.web2)+"\" style=\"color:#1b4f3a\">"+esc(webHost(AGENT.web2))+"</a>"
+    + "</div>");
+  return ""
+    + "<div style=\"background:#f5f4f0;padding:24px 0;font-family:Arial,Helvetica,sans-serif\">"
+    +   "<div style=\"max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e6e4dd\">"
+    +     "<div style=\"background:#1b4f3a;padding:18px 24px\">"
+    +       "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\"><tr>"
+    +         "<td style=\"vertical-align:middle\">"+mark+"</td>"
+    +         "<td style=\"padding-left:12px;color:#ffffff;vertical-align:middle\"><div style=\"font-size:16px;font-weight:bold\">"+esc(AGENT.name)+"</div><div style=\"font-size:12px;color:#cfe0d7\">"+esc(AGENT.title)+" &middot; "+esc(AGENT.co)+"</div></td>"
+    +       "</tr></table>"
+    +     "</div>"
+    +     (headline ? "<div style=\"padding:18px 24px 0;font-size:19px;font-weight:bold;color:#1a1814\">"+esc(headline)+"</div>" : "")
+    +     "<div style=\"padding:14px 24px 4px;font-size:14px;line-height:1.7;color:#222222\">"+paras+"</div>"
+    +     footer
+    +   "</div>"
+    + "</div>";
+}
 
 function draftMsgLocal(l) {
   var name = l.first;
@@ -502,6 +564,26 @@ function App() {
     if (rems.some(function(r){ return r.type==="nurture" && r.date===date; })) return;
     setRems(function(p){ return [...p,{id:uid(),title:"Run Auto-Nurture queue",date:date,time:"09:00",type:"nurture",done:false}]; });
   }, [ready,rems]);
+
+  // Home-anniversary reminders: for each closed client, drop a one-time reminder on their
+  // yearly closing anniversary when it's within 21 days. Deduped by annivKey (leadId+year),
+  // so a fresh reminder is created again next year.
+  useEffect(function(){
+    if (!ready) return;
+    var toAdd = [];
+    leads.forEach(function(l){
+      if (!l.closeDate) return;
+      var na = nextAnniversary(l.closeDate);
+      var du = daysUntil(na);
+      if (du===null || du>21) return;
+      var yr = na.slice(0,4);
+      var key = "anniv:"+l.id+":"+yr;
+      if (rems.some(function(r){ return r.annivKey===key; })) return;
+      var years = anniversaryYears(l.closeDate, na);
+      toAdd.push({id:uid(),title:"🎉 "+years+"-yr home anniversary — "+l.first+" "+l.last,date:na,time:"09:00",type:"anniversary",done:false,leadId:l.id,annivKey:key});
+    });
+    if (toAdd.length) setRems(function(p){ return [...p, ...toAdd]; });
+  }, [ready,leads,rems]);
   useEffect(function(){ if (ready) sset(SK.deals,deals); }, [deals,ready]);
   useEffect(function(){ if (ready) sset(SK.goals,goals); }, [goals,ready]);
   useEffect(function(){ if (ready) sset(SK.act,act); }, [act,ready]);
@@ -565,12 +647,13 @@ function App() {
   const dueToday = leads.filter(function(l){ return l.fu && l.fu <= toDay(); }).length;
   const nurtureDueN = leads.filter(nurtureDue).length;
   const socialDueN = social.filter(function(p){ return p.status!=="posted" && p.date && p.date <= toDay(); }).length;
+  const annivDueN = leads.filter(function(l){ if(!l.closeDate) return false; var d=daysUntil(nextAnniversary(l.closeDate)); return d!==null && d<=30; }).length;
 
   const NAV = [
     {s:"Daily",items:[{id:"dashboard",l:"Dashboard"},{id:"calendar",l:"Today"},{id:"rems",l:"Reminders",b:pendRem}]},
     {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"}]},
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
-    {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"gmail",l:"Gmail"}]},
+    {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN},{id:"gmail",l:"Gmail"}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"listing",l:"Listing Pres."},{id:"buyer",l:"Buyer Criteria"}]},
     {s:"Business",items:[{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"},{id:"score",l:"Scorecard"}]}
   ];
@@ -590,7 +673,10 @@ function App() {
             return <div key={item[0]} style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:700,color:item[2],fontFamily:"monospace"}}>{item[1]}</div><div style={{fontSize:9,color:C.t3,textTransform:"uppercase",letterSpacing:".07em"}}>{item[0]}</div></div>;
           })}
         </div>
-        <div style={{fontSize:11,color:C.t3,fontFamily:"monospace"}}>{new Date().toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})}</div>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}>
+          <div style={{fontSize:11,color:C.t3,fontFamily:"monospace"}}>{new Date().toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})}</div>
+          <div title="Confirms you're viewing the latest saved hub" style={{fontSize:9.5,fontWeight:700,color:C.ac,background:C.aL,border:"1px solid "+C.aB,borderRadius:20,padding:"1px 7px",fontFamily:"monospace"}}>{BUILD}</div>
+        </div>
       </div>
 
       <div style={{display:"flex",minHeight:"calc(100vh - 53px)"}}>
@@ -635,6 +721,7 @@ function App() {
           {tab==="mojo"      && <PanelMojo />}
           {tab==="rs"        && <PanelRS {...pp} />}
           {tab==="selleralerts" && <PanelSellerAlerts {...pp} />}
+          {tab==="anniv"     && <PanelAnniv {...pp} />}
           {tab==="gmail"     && <PanelGmail />}
           {tab==="oh"        && <PanelOH {...pp} />}
           {tab==="net"       && <PanelNet {...pp} />}
@@ -863,7 +950,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     if(!l.email){ setSendMsg("No email on file — add one above first."); return; }
     setSendMsg("📨 Sending tracked email via Brevo…");
     var to=[{email:l.email, name:((l.first||"")+" "+(l.last||"")).trim()}];
-    callBrevo("send",{to:to, subject:emailSubject(l), html:textToHtml(curDraft(l)), senderEmail:AGENT.email, senderName:AGENT.name, replyTo:AGENT.email, tags:["crm-lead"]}).then(function(res){
+    callBrevo("send",{to:to, subject:emailSubject(l), html:brandedEmailHtml(curDraft(l), null, {footer:false}), senderEmail:AGENT.email, senderName:AGENT.name, replyTo:AGENT.email, tags:["crm-lead"]}).then(function(res){
       if(res && res.messageId){
         logContact(l,"email sent via Brevo (tracked)");
         var day=toDay();
@@ -1200,6 +1287,11 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
               <div style={{display:"flex",gap:6}}>
                 {["hot","warm","cold"].map(function(t){ return <Btn key={t} style={{fontSize:11}} onClick={function(){ setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,temp:t}:l; }); }); setModal(function(m){ return {...m,temp:t}; }); }}>{TICON[t]} {t}</Btn>; })}
               </div>
+            </div>
+            <div style={{marginBottom:8}}>
+              <div style={{fontSize:11,color:C.t3,marginBottom:4}}>🎉 Home closing date <span style={{color:C.t3}}>— for yearly "happy anniversary" emails</span>:</div>
+              <input style={{...inp,fontSize:12}} type="date" value={modal.closeDate||""} onChange={function(e){ saveContact("closeDate", e.target.value); }} />
+              {modal.closeDate && <div style={{fontSize:11,color:C.ac,marginTop:4}}>🎂 Next anniversary: {fmtDate(nextAnniversary(modal.closeDate))} · {anniversaryYears(modal.closeDate)}-year{modal.lastAnnivSent?" · last emailed "+modal.lastAnnivSent:""}</div>}
             </div>
             <div style={{marginBottom:8}}>
               <div style={{fontSize:11,color:C.t3,marginBottom:4}}>🔄 Auto-Nurture <span style={{color:C.t3}}>— auto-send market updates on a schedule</span>:</div>
@@ -2020,15 +2112,28 @@ const SOCIAL_STATUS = {
   scheduled: {l:"Scheduled", bg:C.gL,  tx:C.go, bd:C.gB},
   posted:    {l:"Posted",    bg:C.aL,  tx:C.ac, bd:C.aB}
 };
+// ManyChat comment-to-DM keyword automations. The composer appends a "Comment WORD" CTA
+// that matches these triggers; build the matching auto-reply flow in ManyChat.
+const MANYCHAT_KEYWORDS = [
+  {k:"HOME",   use:"Listing details",  reply:"DM the full listing (price, photos, address) + link; ask for their email."},
+  {k:"TOUR",   use:"Book a showing",   reply:"DM asks their preferred day/time and captures name + phone."},
+  {k:"VALUE",  use:"Seller / home value", reply:"DM offers a free home-value estimate; asks for their address + email."},
+  {k:"GUIDE",  use:"Buyer/Seller guide", reply:"DM sends your Buyer's or Seller's Guide PDF + captures email."},
+  {k:"MARKET", use:"Market report",     reply:"DM sends the latest Sonoma County market update; adds them to your list."}
+];
+// Which keyword best fits each post topic (used as the composer's suggested default).
+const TOPIC_KEYWORD = { market:"MARKET", listing:"HOME", lifestyle:"GUIDE", tip:"GUIDE", testimonial:"GUIDE", soldjust:"VALUE" };
 
 function PanelSocial({social,setSocial}) {
   var [platform,setPlatform] = useState("instagram");
   var [topic,setTopic] = useState(SOCIAL_TOPICS[0].k);
   var [extra,setExtra] = useState("");
+  var [mcKey,setMcKey] = useState("");   // ManyChat keyword override; blank = use topic default
   var [draft,setDraft] = useState("");
   var [ld,setLd] = useState(false);
   var [st,setSt] = useState("");
   var [msg,setMsg] = useState("");
+  var [delId,setDelId] = useState(null);   // post pending delete confirmation
 
   function flash(m){ setMsg(m); setTimeout(function(){ setMsg(""); }, 2600); }
   function copy(txt){
@@ -2046,8 +2151,11 @@ function PanelSocial({social,setSocial}) {
   function gen(){
     var t = SOCIAL_TOPICS.find(function(x){ return x.k===topic; }) || SOCIAL_TOPICS[0];
     var plat = SOCIAL_PLATFORMS.find(function(x){ return x.id===platform; }) || SOCIAL_PLATFORMS[0];
+    var kw = (mcKey.trim() || TOPIC_KEYWORD[topic] || "HOME").toUpperCase();
+    var kwInfo = MANYCHAT_KEYWORDS.find(function(x){ return x.k===kw; });
+    var ctaBit = "Just before the hashtags, add a short call to action on its own line telling people to comment the word "+kw+" to get "+(kwInfo?kwInfo.use.toLowerCase():"the details")+" (this triggers an automated DM). ";
     setLd(true); setDraft(""); setSt("");
-    callAI("Write "+t.p+". Platform: "+plat.l+". Voice: "+AGENT.name+", "+AGENT.co+", "+AGENT.city+" — warm, upbeat, professional, not salesy. "+(extra?("Extra detail to include: "+extra+". "):"")+"Keep it tight for social ("+(plat.id==="linkedin"?"up to ~120 words":"under ~60 words")+"). Add 2–4 relevant local hashtags at the end (e.g. #SonomaCounty #SantaRosaRealEstate). Return only the post text, ready to paste.").then(function(txt){
+    callAI("Write "+t.p+". Platform: "+plat.l+". Voice: "+AGENT.name+", "+AGENT.co+", "+AGENT.city+" — warm, upbeat, professional, not salesy. "+(extra?("Extra detail to include: "+extra+". "):"")+"Keep it tight for social ("+(plat.id==="linkedin"?"up to ~120 words":"under ~60 words")+"). "+ctaBit+"Add 2–4 relevant local hashtags at the end (e.g. #SonomaCounty #SantaRosaRealEstate). Return only the post text, ready to paste.").then(function(txt){
       var bad = !txt || txt.indexOf("⚠️")===0 || txt.indexOf("API error")===0 || txt.indexOf("Fetch error")===0;
       if(bad){ setSt(txt||"AI error — check your key."); } else { setDraft(txt); }
       setLd(false);
@@ -2102,6 +2210,11 @@ function PanelSocial({social,setSocial}) {
         <Fld label="Anything specific to include? (optional)">
           <input style={inp} placeholder="e.g. address, price, open house Sat 1–3pm, a fun fact…" value={extra} onChange={function(e){ setExtra(e.target.value); }} />
         </Fld>
+        <div style={{marginTop:8}}>
+          <div style={{fontSize:12,color:C.t2,marginBottom:3,fontWeight:500}}>💬 ManyChat keyword <span style={{color:C.t3,fontWeight:400}}>— the caption will ask people to comment this word to trigger your auto-DM</span></div>
+          <input style={{...inp,textTransform:"uppercase"}} placeholder={"Default for this topic: "+(TOPIC_KEYWORD[topic]||"HOME")} value={mcKey} onChange={function(e){ setMcKey(e.target.value); }} />
+          <div style={{fontSize:10.5,color:C.t3,marginTop:3}}>Make sure this word is set as a comment trigger in ManyChat. See the keyword ideas card below.</div>
+        </div>
         <div style={{display:"flex",gap:8,marginTop:10}}>
           <Btn v="primary" onClick={gen}>✨ Generate post</Btn>
           {draft && <Btn onClick={function(){ setDraft(""); }}>Clear</Btn>}
@@ -2119,6 +2232,23 @@ function PanelSocial({social,setSocial}) {
             </div>
           </div>
         )}
+      </Card>
+
+      {/* ManyChat keyword automations reference */}
+      <Card title="💬 ManyChat keyword ideas (comment → auto-DM)">
+        <div style={{fontSize:12,color:C.t3,marginBottom:8,lineHeight:1.5}}>Set each of these as a <b>comment keyword trigger</b> in ManyChat, then use the matching word in your post's call to action. When someone comments it, ManyChat auto-DMs them and captures the lead.</div>
+        {MANYCHAT_KEYWORDS.map(function(m){
+          return (
+            <div key={m.k} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"7px 0",borderBottom:"1px solid "+C.br}}>
+              <span style={{fontSize:11,fontWeight:700,color:C.ac,background:C.aL,border:"1px solid "+C.aB,borderRadius:6,padding:"2px 8px",fontFamily:"monospace",minWidth:64,textAlign:"center"}}>{m.k}</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12.5,fontWeight:600}}>{m.use}</div>
+                <div style={{fontSize:11.5,color:C.t2,lineHeight:1.5}}>{m.reply}</div>
+              </div>
+            </div>
+          );
+        })}
+        <div style={{fontSize:11,color:C.go,marginTop:8,lineHeight:1.5}}>💡 Always ask for an <b>email or phone</b> inside the DM flow — that's what turns a commenter into a real lead you can add to your pipeline.</div>
       </Card>
 
       {/* Content calendar */}
@@ -2143,12 +2273,106 @@ function PanelSocial({social,setSocial}) {
                 {p.status!=="posted" && <Btn onClick={function(){ update(p.id,{status:"posted"}); }} style={{fontSize:11}}>✓ Mark posted</Btn>}
                 {p.status==="posted" && <Btn onClick={function(){ update(p.id,{status:"idea"}); }} style={{fontSize:11}}>↩ Reopen</Btn>}
                 <Btn onClick={function(){ copy(p.text); }} style={{fontSize:11}}>📋 Copy</Btn>
-                <Btn v="rose" onClick={function(){ del(p.id); }} style={{fontSize:11}}>Delete</Btn>
+                {delId===p.id
+                  ? <span style={{display:"inline-flex",gap:6,alignItems:"center"}}>
+                      <Btn v="rose" onClick={function(){ del(p.id); setDelId(null); flash("Post deleted"); }} style={{fontSize:11}}>Confirm delete</Btn>
+                      <Btn onClick={function(){ setDelId(null); }} style={{fontSize:11}}>Cancel</Btn>
+                    </span>
+                  : <Btn v="rose" onClick={function(){ setDelId(p.id); }} style={{fontSize:11}}>🗑 Delete</Btn>}
               </div>
             </div>
           );
         })}
       </Card>
+    </div>
+  );
+}
+
+/* ── HOME ANNIVERSARIES ──────────────────────────────────────── */
+function PanelAnniv({leads,setLeads}){
+  var [aiFor,setAiFor]=useState(null);
+  var [aiTxt,setAiTxt]=useState("");
+  var [aiLd,setAiLd]=useState(false);
+  var [msg,setMsg]=useState("");
+  var [sendingId,setSendingId]=useState(null);
+  function flash(m){ setMsg(m); setTimeout(function(){ setMsg(""); },3500); }
+  var SIGTXT = "\n\n— "+AGENT.name+"\n"+AGENT.co+"\n"+AGENT.phone+" | "+AGENT.email;   // plain-text signature for Copy / Gmail
+  function copy(txt){ var full=(txt||"")+SIGTXT; if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(full).then(function(){ flash("Copied ✓"); }); }
+  var clients = (leads||[]).filter(function(l){ return l.closeDate; }).map(function(l){
+    var na=nextAnniversary(l.closeDate);
+    return {l:l, na:na, days:daysUntil(na), years:anniversaryYears(l.closeDate,na)};
+  }).sort(function(a,b){ return (a.days===null?9e9:a.days)-(b.days===null?9e9:b.days); });
+  function draft(c){
+    setAiFor(c.l.id); setAiLd(true); setAiTxt("");
+    callAI("Write a short warm 'happy home anniversary' email from "+AGENT.name+", "+AGENT.co+" in "+AGENT.city+", to a past client named "+c.l.first+". It has been "+c.years+" year"+(c.years===1?"":"s")+" since they closed on their home"+(c.l.addr?(" at "+c.l.addr):"")+". Warmly congratulate them on the anniversary, say it was a pleasure helping them, and gently offer to be a resource (a free updated home value, or referrals) with zero pressure. Under 110 words. Do NOT include a sign-off, signature, or the agent's name/contact at the end — the email template already adds that. End after the final sentence of the message.").then(function(t){
+      var bad=!t||t.indexOf("⚠️")===0||t.indexOf("API error")===0||t.indexOf("Fetch error")===0;
+      setAiTxt(bad?(t||"AI error — check your key."):t); setAiLd(false);
+    });
+  }
+  function gmail(c, body){
+    var su="Happy "+c.years+"-Year Home Anniversary! 🎉";
+    var url="https://mail.google.com/mail/?view=cm&fs=1&to="+encodeURIComponent(c.l.email||"")+"&su="+encodeURIComponent(su)+"&body="+encodeURIComponent((body||"")+SIGTXT);
+    window.open(url,"_blank","noopener");
+  }
+  // Send the drafted email straight through Brevo (server-side transactional send).
+  function sendBrevo(c, body){
+    if(!c.l.email){ flash("⚠️ No email on file for "+c.l.first+" "+c.l.last); return; }
+    if(!body || !body.trim()){ flash("Draft the email first."); return; }
+    setSendingId(c.l.id);
+    var su="Happy "+c.years+"-Year Home Anniversary! 🎉";
+    callBrevo("send", { to:[{email:c.l.email, name:((c.l.first||"")+" "+(c.l.last||"")).trim()}], subject:su, html:brandedEmailHtml(body, su) }).then(function(res){
+      setSendingId(null);
+      if(res && res.ok){ markSent(c); flash("✓ Sent to "+c.l.email+" via Brevo"); }
+      else { flash("⚠️ Send failed: "+((res&&res.error)||(res&&res.data&&res.data.message)||"unknown")+" — deploy the brevo function + set BREVO_API_KEY."); }
+    });
+  }
+  function markSent(c){
+    var yr=(c.na||toDay()).slice(0,4);
+    setLeads(function(p){ return p.map(function(x){ return x.id===c.l.id?{...x,lastAnnivSent:yr,lc:toDay(),log:[...(x.log||[]),toDay()+" — "+c.years+"-yr home anniversary email sent"]}:x; }); });
+    flash("Logged ✓ — "+c.l.first+" marked emailed for "+yr);
+  }
+  function unmark(c){ setLeads(function(p){ return p.map(function(x){ return x.id===c.l.id?{...x,lastAnnivSent:null}:x; }); }); }
+  return (
+    <div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>🎉 Home Anniversaries</div>
+      <div style={{fontSize:12.5,color:C.t3,marginBottom:14,lineHeight:1.5}}>Every past client with a closing date shows up here, sorted by their next anniversary. A quick happy-anniversary note each year is one of the easiest ways to earn repeat business and referrals. Set the date on their lead card: <b>All Leads → open a lead → 🎉 Home closing date</b>.</div>
+      {msg && <div style={{fontSize:12,color:C.ac,marginBottom:10,fontWeight:600}}>{msg}</div>}
+      {clients.length===0 ? (
+        <Card><div style={{color:C.t3,fontSize:13,textAlign:"center",padding:20}}>No closing dates yet. Open a past client under <b>All Leads</b> and set their <b>🎉 Home closing date</b> — they will appear here automatically.</div></Card>
+      ) : clients.map(function(c){
+        var soon = c.days!==null && c.days<=30;
+        var sentThisYr = c.l.lastAnnivSent === (c.na||"").slice(0,4);
+        return (
+          <Card key={c.l.id} style={soon?{border:"1px solid "+C.aB,background:C.aL}:{}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:180}}>
+                <div style={{fontSize:14,fontWeight:700}}>{c.l.first} {c.l.last} <span style={{fontSize:11,fontWeight:600,color:C.ac}}>· {c.years}-year</span></div>
+                <div style={{fontSize:11.5,color:C.t2}}>{c.l.addr||"—"}</div>
+                <div style={{fontSize:11.5,color:C.t3,marginTop:2}}>Closed {fmtDate(c.l.closeDate)} · 🎂 next {fmtDate(c.na)} {c.days===0?"(today!)":(c.days!==null?("(in "+c.days+"d)"):"")}{sentThisYr?" · ✓ emailed "+c.l.lastAnnivSent:""}</div>
+                {!c.l.email && <div style={{fontSize:11,color:C.ro,marginTop:2}}>⚠️ no email on file</div>}
+              </div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                <Btn v="primary" style={{fontSize:11}} onClick={function(){ draft(c); }}>✨ Draft email</Btn>
+                {sentThisYr
+                  ? <Btn style={{fontSize:11}} onClick={function(){ unmark(c); }}>↩ Unmark</Btn>
+                  : <Btn v="gold" style={{fontSize:11}} onClick={function(){ markSent(c); }}>✓ Mark emailed</Btn>}
+              </div>
+            </div>
+            {aiFor===c.l.id && (aiLd || aiTxt) && (
+              aiLd ? <AIBox loading={true} /> :
+              <div style={{marginTop:8}}>
+                <AIBox text={aiTxt} />
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6}}>
+                  {c.l.email && <Btn v="primary" onClick={function(){ sendBrevo(c, aiTxt); }} style={{fontSize:11}}>{sendingId===c.l.id?"Sending…":"📧 Send via Brevo"}</Btn>}
+                  {c.l.email && <Btn onClick={function(){ gmail(c, aiTxt); }} style={{fontSize:11}}>Open in Gmail</Btn>}
+                  <Btn onClick={function(){ copy(aiTxt); }} style={{fontSize:11}}>📋 Copy</Btn>
+                  <Btn v="gold" onClick={function(){ markSent(c); }} style={{fontSize:11}}>✓ Mark emailed</Btn>
+                </div>
+              </div>
+            )}
+          </Card>
+        );
+      })}
     </div>
   );
 }
@@ -2254,7 +2478,7 @@ function PanelAIEmail() {
     if(!to){ setSt("Add a valid email address in the To field to send via Brevo."); return; }
     if(!(form.subject||"").trim()){ setSt("Add a subject line to send via Brevo."); return; }
     setSt("📨 Sending tracked email via Brevo…");
-    callBrevo("send",{to:[{email:to}], subject:form.subject, html:textToHtml(email), senderEmail:AGENT.email, senderName:AGENT.name, replyTo:AGENT.email, tags:["ai-email"]}).then(function(res){
+    callBrevo("send",{to:[{email:to}], subject:form.subject, html:brandedEmailHtml(email, null, {footer:false}), senderEmail:AGENT.email, senderName:AGENT.name, replyTo:AGENT.email, tags:["ai-email"]}).then(function(res){
       if(res && res.messageId) setSt("✓ Sent via Brevo to "+to+" — opens & clicks will track in your Brevo dashboard.");
       else setSt("⚠️ Brevo send failed: "+((res&&res.error)||(res&&res.data&&res.data.message)||"unknown")+". Make sure your sender is verified in Brevo.");
     });
@@ -2740,6 +2964,17 @@ function PanelBuyerNet({leads,setLeads}) {
 }
 
 /* ── TRANSACTIONS ────────────────────────────────────────────── */
+// Commission math for one transaction: gross commission and the agent's net payout after split.
+function txCommission(tx){
+  var comm = Number(tx.comm)||2.5;
+  var split = (tx.split===0||tx.split) ? Number(tx.split) : 80;
+  var basis = tx.basis==="net" ? "net" : "gross";
+  var base = (basis==="net" && Number(tx.netPrice)>0) ? Number(tx.netPrice) : (Number(tx.price)||0);
+  var grossComm = base ? Math.round(base*comm/100) : 0;
+  var netComm = Math.round(grossComm*split/100);
+  return { base:base, basis:basis, comm:comm, split:split, grossComm:grossComm, netComm:netComm };
+}
+
 function PanelTx({txs,setTxs}) {
   var [show,setShow] = useState(false);
   var [form,setForm] = useState({addr:"",client:"",type:"Listing",price:"",comm:"2.5",split:"80",closeDate:""});
@@ -2752,9 +2987,35 @@ function PanelTx({txs,setTxs}) {
   }
   function updTx(id,key,val){ setTxs(function(p){ return p.map(function(t){ return t.id===id?{...t,[key]:val}:t; }); }); }
 
+  var totGross=0, totNet=0, paidNet=0;
+  (txs||[]).forEach(function(t){
+    var cc=txCommission(t);
+    totGross+=cc.grossComm; totNet+=cc.netComm;
+    if(t.paid) paidNet+=cc.netComm;
+  });
+  var outstanding = totNet - paidNet;
+
   return (
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:14}}>Transactions</div>
+      {txs.length>0 && (
+        <Card style={{background:C.ac,border:"1px solid "+C.ac,marginBottom:10}}>
+          <div style={{display:"flex",flexWrap:"wrap",gap:8,alignItems:"stretch"}}>
+            {[
+              ["Your total payout", fmtMoney(totNet), "#ffffff", "net of split · "+txs.length+" deal"+(txs.length===1?"":"s")],
+              ["Paid out", fmtMoney(paidNet), "#bfe6d3", "commission received"],
+              ["Outstanding", fmtMoney(outstanding), "#ffe0a3", "not yet paid"],
+              ["Total GCI", fmtMoney(totGross), "#cfe0d7", "gross commission"]
+            ].map(function(x){
+              return <div key={x[0]} style={{flex:"1 1 120px",background:"rgba(255,255,255,0.08)",borderRadius:8,padding:"9px 12px"}}>
+                <div style={{fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"rgba(255,255,255,0.7)"}}>{x[0]}</div>
+                <div style={{fontSize:20,fontWeight:700,color:x[2],fontFamily:"monospace",marginTop:2}}>{x[1]}</div>
+                <div style={{fontSize:9.5,color:"rgba(255,255,255,0.6)",marginTop:1}}>{x[3]}</div>
+              </div>;
+            })}
+          </div>
+        </Card>
+      )}
       <Btn v="primary" onClick={function(){ setShow(function(p){ return !p; }); }} style={{marginBottom:10}}>+ New Transaction</Btn>
       {show && (
         <Card>
@@ -2813,6 +3074,11 @@ function PanelTx({txs,setTxs}) {
                     <span style={{fontSize:13,color:C.t2}}>%  to you  ·  brokerage keeps {fmtMoney(grossComm-netComm)}</span>
                   </div>
                   <div style={{fontSize:17,fontWeight:700,color:C.ac,marginLeft:"auto"}}>= {fmtMoney(netComm)}</div>
+                </div>
+                <div style={{borderTop:"1px solid "+C.aB,marginTop:8,paddingTop:8,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,fontWeight:700,color:C.t3,textTransform:"uppercase",letterSpacing:".06em"}}>Payout</span>
+                  <Btn v={tx.paid?"primary":"def"} style={{fontSize:11}} onClick={function(){ setTxs(function(p){ return p.map(function(t){ return t.id===tx.id?{...t,paid:!t.paid,paidDate:(!t.paid?toDay():t.paidDate)}:t; }); }); }}>{tx.paid?("✓ Paid"+(tx.paidDate?" "+fmtDate(tx.paidDate):"")):"Mark paid"}</Btn>
+                  <span style={{fontSize:12,fontWeight:600,color:tx.paid?C.ac:C.go,marginLeft:"auto"}}>{tx.paid?"Received":"Outstanding "+fmtMoney(netComm)}</span>
                 </div>
               </div>
             )}
