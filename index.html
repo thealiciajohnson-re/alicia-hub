@@ -3086,6 +3086,16 @@ function PanelTx({txs,setTxs}) {
               {tx.closeDate && <div style={{fontSize:11,color:C.t3,background:C.s2,borderRadius:5,padding:"3px 8px",whiteSpace:"nowrap"}}>Closes {fmtDate(tx.closeDate)}</div>}
             </div>
 
+            {/* Editable sale price — always available, even on a $0 deal */}
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.t3,textTransform:"uppercase",letterSpacing:".06em",minWidth:78}}>Sale price</div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:14,color:C.t2,fontWeight:700}}>$</span>
+                <input type="number" step="1000" min="0" value={tx.price||""} placeholder="715000" onChange={function(e){ updTx(tx.id,"price",Number(e.target.value)||0); }} style={{...inp,width:130,fontSize:14,fontWeight:700,textAlign:"right"}} />
+              </div>
+              {tx.price>0 && <span style={{fontSize:11,color:C.t3}}>{fmtMoney(tx.price)}</span>}
+            </div>
+
             {/* Commission + brokerage split calculator */}
             {tx.price > 0 && (
               <div style={{background:C.aL,border:"1px solid "+C.aB,borderRadius:7,padding:"10px 12px",marginBottom:10}}>
