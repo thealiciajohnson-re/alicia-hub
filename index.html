@@ -445,8 +445,8 @@ function draftMsgLocal(l) {
   var name = l.first;
   var isEmail = !!l.email;
   var sign = isEmail
-    ? "\n\nWarm regards,\n"+AGENT.name+"\n"+AGENT.phone+" | "+AGENT.email
-    : "\n\n— "+AGENT.name+", "+AGENT.co+" | "+AGENT.phone;
+    ? "\n\nWarm regards,\n"+AGENT.name+"\n"+AGENT.phone+" | "+AGENT.email+"\nDRE #"+AGENT.lic
+    : "\n\n— "+AGENT.name+", "+AGENT.co+" | "+AGENT.phone+" · DRE #"+AGENT.lic;
   var greeting = "Hi "+name+(isEmail ? "," : "!");
   var body = "";
 
@@ -482,7 +482,7 @@ function draftMarketLocal(l, mk) {
   var price = mk.median || "$715K";
   var dom = mk.dom ? mk.dom+" days" : "28 days";
   var inv = mk.inv ? mk.inv+" homes" : "~840 homes";
-  var sign = "\n\nWarm regards,\n"+AGENT.name+"\n"+AGENT.phone+" | "+AGENT.email;
+  var sign = "\n\nWarm regards,\n"+AGENT.name+"\n"+AGENT.phone+" | "+AGENT.email+"\nDRE #"+AGENT.lic;
   var cta = l.type==="seller"
     ? "If you've ever wondered what your home could fetch in today's market, I'd be glad to put together a quick, no-obligation value estimate for you."
     : "Well-priced homes are still moving fast, so it's a great time to have your search dialed in. I can set up instant alerts the moment something matching your criteria hits the market.";
@@ -490,7 +490,7 @@ function draftMarketLocal(l, mk) {
 }
 
 function draftListingLocal(l, lst) {
-  var sign = "\n\nWarm regards,\n"+AGENT.name+"\n"+AGENT.phone+" | "+AGENT.email;
+  var sign = "\n\nWarm regards,\n"+AGENT.name+"\n"+AGENT.phone+" | "+AGENT.email+"\nDRE #"+AGENT.lic;
   var addr  = (lst&&lst.addr)    ? lst.addr : "[Property address]";
   var price = (lst&&lst.price)   ? ("$"+Number(lst.price).toLocaleString()) : "$[price]";
   var beds  = (lst&&lst.beds)    ? lst.beds : "[#]";
@@ -1124,7 +1124,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
         : srcZip ? ("📊 No data for ZIP "+srcZip+" — used county-wide numbers.")
         : "📊 No ZIP on this lead — used county-wide numbers. Add a ZIP code on the lead for local figures."
       );
-      callAI("Write a short warm market-update email from "+AGENT.name+" to "+l.first+" "+l.last+", a "+l.temp+" "+l.type+" lead in "+areaOf(l)+" (Sonoma County). Use current local stats: median price "+price+", average "+dom+" on market, "+inv+" active listings. Reference their city/area ("+areaOf(l)+") naturally rather than just 'Sonoma County'. Under 130 words. Warm, local, genuinely helpful, not pushy. Start with 'Hi "+l.first+",'. End with a soft invitation to reach out. Body only. Sign off: "+AGENT.name+" | "+AGENT.phone+" | "+AGENT.email+".").then(function(t){
+      callAI("Write a short warm market-update email from "+AGENT.name+" to "+l.first+" "+l.last+", a "+l.temp+" "+l.type+" lead in "+areaOf(l)+" (Sonoma County). Use current local stats: median price "+price+", average "+dom+" on market, "+inv+" active listings. Reference their city/area ("+areaOf(l)+") naturally rather than just 'Sonoma County'. Under 130 words. Warm, local, genuinely helpful, not pushy. Start with 'Hi "+l.first+",'. End with a soft invitation to reach out. Body only. Sign off: "+AGENT.name+" | "+AGENT.phone+" | "+AGENT.email+" | DRE #"+AGENT.lic+".").then(function(t){
         var bad = !t || t.indexOf("⚠️")===0 || t.indexOf("API error")===0 || t.indexOf("Fetch error")===0;
         setAT(bad ? draftMarketLocal(l, mk) : t); setAL(false);
       });
@@ -1137,7 +1137,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     var info = lst
       ? ("Use these real listing details, written naturally into the email (no placeholders): address "+(lst.addr||"")+(lst.price?(", price $"+Number(lst.price).toLocaleString()):"")+(lst.beds?(", "+lst.beds+" bedrooms"):"")+(lst.baths?(", "+lst.baths+" bathrooms"):"")+(lst.sqft?(", "+lst.sqft+" square feet"):"")+(lst.feature?(", standout feature: "+lst.feature):"")+(lst.link?(", listing link: "+lst.link):"")+".")
       : "Keep clear bracketed placeholders the agent will fill in: [property address], [price], [# beds], [# baths], [square footage], [one standout feature], and [listing link].";
-    callAI("Write a short warm 'just listed — new home on the market' announcement email from "+AGENT.name+" to "+l.first+" "+l.last+", a "+l.type+" lead in Sonoma County. "+info+" Invite them to a private showing this week and note that homes move fast. Under 140 words. Warm and enthusiastic but not pushy. Start with 'Hi "+l.first+",'. Sign off: "+AGENT.name+" | "+AGENT.phone+".").then(function(t){
+    callAI("Write a short warm 'just listed — new home on the market' announcement email from "+AGENT.name+" to "+l.first+" "+l.last+", a "+l.type+" lead in Sonoma County. "+info+" Invite them to a private showing this week and note that homes move fast. Under 140 words. Warm and enthusiastic but not pushy. Start with 'Hi "+l.first+",'. Sign off: "+AGENT.name+" | "+AGENT.phone+" | DRE #"+AGENT.lic+".").then(function(t){
       var bad = !t || t.indexOf("⚠️")===0 || t.indexOf("API error")===0 || t.indexOf("Fetch error")===0;
       setAT(bad ? draftListingLocal(l, lst) : t); setAL(false);
     });
@@ -1968,7 +1968,7 @@ function PanelNurture({leads,setLeads,setTab,setFocusLead,market}) {
   function markSent(l){ setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,lastNurtured:toDay(),lc:toDay(),log:[...(x.log||[]),toDay()+" — market update sent (auto-nurture)"]}:x; }); }); }
   function genFor(l){
     setBusyId(l.id);
-    callAI("Write a short warm market-update email to "+l.first+" "+l.last+", a "+l.temp+" "+l.type+" lead in "+areaOf(l)+" (Sonoma County). Current local stats: median price "+stats.price+", average days on market "+stats.dom+", active listings "+stats.inv+". "+(stats.note?"My angle: "+stats.note+". ":"")+"Reference their city/area ("+areaOf(l)+") naturally rather than just 'Sonoma County'. Under 130 words. Warm, local, genuinely helpful, not pushy. Start with 'Hi "+l.first+",'. End with a soft invitation to reach out anytime. Body only. Sign off: "+AGENT.name+" | "+AGENT.phone+" | "+AGENT.email+".").then(function(t){
+    callAI("Write a short warm market-update email to "+l.first+" "+l.last+", a "+l.temp+" "+l.type+" lead in "+areaOf(l)+" (Sonoma County). Current local stats: median price "+stats.price+", average days on market "+stats.dom+", active listings "+stats.inv+". "+(stats.note?"My angle: "+stats.note+". ":"")+"Reference their city/area ("+areaOf(l)+") naturally rather than just 'Sonoma County'. Under 130 words. Warm, local, genuinely helpful, not pushy. Start with 'Hi "+l.first+",'. End with a soft invitation to reach out anytime. Body only. Sign off: "+AGENT.name+" | "+AGENT.phone+" | "+AGENT.email+" | DRE #"+AGENT.lic+".").then(function(t){
       var bad = !t || t.indexOf("⚠️")===0 || t.indexOf("API error")===0 || t.indexOf("Fetch error")===0;
       setDrafts(function(p){ var n={...p}; n[l.id]= bad ? draftMarketLocal(l, mk) : t; return n; }); setBusyId("");   // AI failed → built-in template (live market data)
     });
@@ -2082,14 +2082,14 @@ function PanelMktgEmail({leads,market}) {
     var L=indLead();
     var greet = L ? ("Hi "+L.first+",") : "Hi there!";
     var area = L ? (cityOf(L)||"Sonoma County") : "Sonoma County";
-    return greet+"\n\nHere's a quick snapshot of the "+area+" market this month:\n\n• Median price: "+form.price+"\n• Days on market: "+form.dom+"\n• Active listings: "+form.inv+"\n\n"+(form.note?form.note+"\n\n":"")+"Whether you're thinking about buying or selling — or just curious what your home is worth — I'm always happy to talk it through. No pressure, ever.\n\nWarm regards,\n"+AGENT.name+"\n"+AGENT.phone+" | "+AGENT.email;
+    return greet+"\n\nHere's a quick snapshot of the "+area+" market this month:\n\n• Median price: "+form.price+"\n• Days on market: "+form.dom+"\n• Active listings: "+form.inv+"\n\n"+(form.note?form.note+"\n\n":"")+"Whether you're thinking about buying or selling — or just curious what your home is worth — I'm always happy to talk it through. No pressure, ever.\n\nWarm regards,\n"+AGENT.name+"\n"+AGENT.phone+" | "+AGENT.email+"\nDRE #"+AGENT.lic;
   }
   function gen() {
     setLd(true); setPrev(""); setSt("");
     var L = indLead();
     var aud = L ? ("a specific client, "+L.first+" "+L.last+(L.addr?(" at "+L.addr):"")+", a "+L.type+" lead in "+(cityOf(L)||"Sonoma County")) : ("my "+segLabel()+" in Sonoma County");
     var greetInstr = L ? ("Write it personally to them and start with 'Hi "+L.first+",'.") : "This goes to a list, so start with a warm general greeting like 'Hi there!' — do NOT use a [First Name] placeholder.";
-    callAI("Write a short warm market-update email to "+aud+". Stats: median price "+form.price+", days on market "+form.dom+", active listings "+form.inv+". "+(form.note?"My angle: "+form.note+". ":"")+greetInstr+" Under 150 words. Warm, local. Body only. Sign off: "+AGENT.name+" | "+AGENT.phone+" | "+AGENT.email+".").then(function(t){
+    callAI("Write a short warm market-update email to "+aud+". Stats: median price "+form.price+", days on market "+form.dom+", active listings "+form.inv+". "+(form.note?"My angle: "+form.note+". ":"")+greetInstr+" Under 150 words. Warm, local. Body only. Sign off: "+AGENT.name+" | "+AGENT.phone+" | "+AGENT.email+" | DRE #"+AGENT.lic+".").then(function(t){
       var bad = !t || t.indexOf("⚠️")===0 || t.indexOf("API error")===0 || t.indexOf("Fetch error")===0;
       setPrev(bad ? marketLocal() : t); setLd(false);   // AI failed → built-in template, so it always produces an email
     });
@@ -2331,7 +2331,7 @@ function PanelAnniv({leads,setLeads}){
   var [msg,setMsg]=useState("");
   var [sendingId,setSendingId]=useState(null);
   function flash(m){ setMsg(m); setTimeout(function(){ setMsg(""); },3500); }
-  var SIGTXT = "\n\n— "+AGENT.name+"\n"+AGENT.co+"\n"+AGENT.phone+" | "+AGENT.email;   // plain-text signature for Copy / Gmail
+  var SIGTXT = "\n\n— "+AGENT.name+"\n"+AGENT.co+"\n"+AGENT.phone+" | "+AGENT.email+"\nDRE #"+AGENT.lic;   // plain-text signature for Copy / Gmail
   function copy(txt){ var full=(txt||"")+SIGTXT; if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(full).then(function(){ flash("Copied ✓"); }); }
   var clients = (leads||[]).filter(function(l){ return l.closeDate; }).map(function(l){
     var na=nextAnniversary(l.closeDate);
@@ -2417,7 +2417,7 @@ function PanelCampaigns() {
   function copy(txt){
     if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function(){ setMsg("Copied ✓ — paste into Brevo → Campaigns"); setTimeout(function(){ setMsg(""); },2600); }, function(){ setMsg("Couldn't copy — select & copy manually."); });
   }
-  var SIG = "Warm regards,\nAlicia Johnson | Excellerate Real Estate\n707-849-6775 | alicia@excelleraterealestate.com";
+  var SIG = "Warm regards,\nAlicia Johnson | Excellerate Real Estate\n707-849-6775 | alicia@excelleraterealestate.com\nDRE #02272644";
   var WEEKS = [
     {wk:"Week 1", theme:"📊 Market Update", purpose:"Establish expertise",
      subj:"Your Mid-Year Sonoma County Market Update 🏡",
@@ -2486,7 +2486,7 @@ function PanelAIEmail() {
   function gen() {
     if(!form.prompt.trim()){ setSt("Tell the writer what the email should say first."); return; }
     setNoKey(false); setLd(true); setEmail(""); setSt("");
-    callAI("Write a professional warm real estate email from "+AGENT.name+", "+AGENT.co+", "+AGENT.city+". "+(form.subject?"Subject: \""+form.subject+"\".":" ")+" Instructions: "+form.prompt+". Body only, start with greeting, under 150 words. Sign off: "+AGENT.name+" | "+AGENT.phone+" | "+AGENT.email+".").then(function(t){
+    callAI("Write a professional warm real estate email from "+AGENT.name+", "+AGENT.co+", "+AGENT.city+". "+(form.subject?"Subject: \""+form.subject+"\".":" ")+" Instructions: "+form.prompt+". Body only, start with greeting, under 150 words. Sign off: "+AGENT.name+" | "+AGENT.phone+" | "+AGENT.email+" | DRE #"+AGENT.lic+".").then(function(t){
       var bad = !t || t.indexOf("⚠️")===0 || t.indexOf("API error")===0 || t.indexOf("Fetch error")===0;
       if(bad){ setSt(t||"AI error — check your key."); setEmail(""); } else { setEmail(t); }
       setLd(false);
@@ -2691,7 +2691,7 @@ function PanelSellerAlerts({leads,setLeads,market}) {
     fetchAVM(l).then(function(d){ setVals(function(p){ var n={...p}; n[l.id]= d || {error:true}; return n; }); setValBusy(""); });
   }
   function valueLocal(l, ov, avm){
-    var sign = "\n\nWarm regards,\n"+AGENT.name+"\n"+AGENT.phone+" | "+AGENT.email;
+    var sign = "\n\nWarm regards,\n"+AGENT.name+"\n"+AGENT.phone+" | "+AGENT.email+"\nDRE #"+AGENT.lic;
     var city = cityOf(l) || "Sonoma County";
     var price = (ov && ov.price) ? ov.price : stats.price;
     var dom = (ov && ov.dom) ? ov.dom : stats.dom;
@@ -2712,7 +2712,7 @@ function PanelSellerAlerts({leads,setLeads,market}) {
       var info = avm
         ? "Their home"+(l.addr?(" at "+l.addr):"")+" has a current automated value estimate of about "+avm.value+". Lead with this specific estimate. Note it's an automated estimate and that a personalized CMA from you is more accurate. Also weave in their local "+area+" market (median "+price+", avg "+dom+" on market). Then offer a free CMA. Do NOT mention their equity or mortgage."
         : "Reference their local "+area+" market specifically: median price "+price+", average "+dom+" on market, values "+stats.trend+", and offer a free, no-obligation CMA for their specific home.";
-      callAI("Write a short warm home-value update email from "+AGENT.name+" to "+l.first+" "+l.last+", a homeowner"+(l.addr?(" at "+l.addr):"")+" in "+area+" (Sonoma County). "+info+" Use their city/area name naturally. Under 150 words. Warm, helpful, not pushy. Start with 'Hi "+l.first+",'. Sign off: "+AGENT.name+" | "+AGENT.phone+" | "+AGENT.email+".").then(function(t){
+      callAI("Write a short warm home-value update email from "+AGENT.name+" to "+l.first+" "+l.last+", a homeowner"+(l.addr?(" at "+l.addr):"")+" in "+area+" (Sonoma County). "+info+" Use their city/area name naturally. Under 150 words. Warm, helpful, not pushy. Start with 'Hi "+l.first+",'. Sign off: "+AGENT.name+" | "+AGENT.phone+" | "+AGENT.email+" | DRE #"+AGENT.lic+".").then(function(t){
         var bad = !t || t.indexOf("⚠️")===0 || t.indexOf("API error")===0 || t.indexOf("Fetch error")===0;
         setDrafts(function(p){ var n={...p}; n[l.id]= bad ? valueLocal(l, ov, avm) : t; return n; }); setBusyId("");
       });
@@ -2801,7 +2801,7 @@ function PanelSellerAlerts({leads,setLeads,market}) {
 function PanelGmail() {
   var [form,setForm] = useState({to:"",subject:"",prompt:""}); var [email,setEmail] = useState(""); var [ld,setLd] = useState(false); var [st,setSt] = useState("");
   function fld(k){ return function(e){ setForm(function(p){ return {...p,[k]:e.target.value}; }); }; }
-  function gen() { if(!form.prompt) return; setLd(true); callAI("Write a professional real estate email from "+AGENT.name+", "+AGENT.co+". Subject: \""+(form.subject||"Follow-up")+"\". Instructions: "+form.prompt+". Body only, under 150 words. Sign: "+AGENT.name+" | "+AGENT.phone+" | "+AGENT.email).then(function(t){ setEmail(t); setLd(false); }); }
+  function gen() { if(!form.prompt) return; setLd(true); callAI("Write a professional real estate email from "+AGENT.name+", "+AGENT.co+". Subject: \""+(form.subject||"Follow-up")+"\". Instructions: "+form.prompt+". Body only, under 150 words. Sign: "+AGENT.name+" | "+AGENT.phone+" | "+AGENT.email+" | DRE #"+AGENT.lic).then(function(t){ setEmail(t); setLd(false); }); }
   function send() { setSt("Sending…"); setTimeout(function(){ setSt("Sent to "+form.to+" from "+AGENT.email); },800); }
   return (
     <div>
