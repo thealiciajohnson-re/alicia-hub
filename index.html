@@ -653,7 +653,7 @@ function App() {
     {s:"Daily",items:[{id:"dashboard",l:"Dashboard"},{id:"calendar",l:"Today"},{id:"rems",l:"Reminders",b:pendRem}]},
     {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"}]},
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
-    {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN},{id:"gmail",l:"Gmail"}]},
+    {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
     {s:"Business",items:[{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"},{id:"score",l:"Scorecard"}]}
   ];
@@ -722,7 +722,6 @@ function App() {
           {tab==="rs"        && <PanelRS {...pp} />}
           {tab==="selleralerts" && <PanelSellerAlerts {...pp} />}
           {tab==="anniv"     && <PanelAnniv {...pp} />}
-          {tab==="gmail"     && <PanelGmail />}
           {tab==="oh"        && <PanelOH {...pp} />}
           {tab==="net"       && <PanelNet {...pp} />}
           {tab==="buyernet"  && <PanelBuyerNet {...pp} />}
@@ -3007,10 +3006,13 @@ function txCommission(tx){
   var basis = tx.basis==="net" ? "net" : "gross";
   var base = (basis==="net" && Number(tx.netPrice)>0) ? Number(tx.netPrice) : (Number(tx.price)||0);
   var grossComm = base ? Math.round(base*comm/100) : 0;
-  var calcNet = Math.round(grossComm*split/100);        // payout from the split formula
+  var coSplit = Number(tx.coSplit)||0;                  // % of gross commission to another agent/referral, off the top
+  var coAmt = Math.round(grossComm*coSplit/100);
+  var afterCo = grossComm - coAmt;                       // your share of gross before brokerage split
+  var calcNet = Math.round(afterCo*split/100);          // payout after brokerage split
   var hasOverride = (tx.payout!==undefined && tx.payout!==null && tx.payout!=="");  // manual payout entered
   var netComm = hasOverride ? Number(tx.payout) : calcNet;
-  return { base:base, basis:basis, comm:comm, split:split, grossComm:grossComm, calcNet:calcNet, netComm:netComm, overridden:hasOverride };
+  return { base:base, basis:basis, comm:comm, split:split, grossComm:grossComm, coSplit:coSplit, coAmt:coAmt, afterCo:afterCo, calcNet:calcNet, netComm:netComm, overridden:hasOverride };
 }
 
 function PanelTx({txs,setTxs}) {
@@ -3073,7 +3075,7 @@ function PanelTx({txs,setTxs}) {
       )}
       {txs.length===0 ? <div style={{color:C.t3,fontSize:13,marginTop:8}}>No transactions yet.</div> : txs.map(function(tx){
         var cc = txCommission(tx);
-        var comm=cc.comm, split=cc.split, basis=cc.basis, base=cc.base, grossComm=cc.grossComm, netComm=cc.netComm, calcNet=cc.calcNet, overridden=cc.overridden;
+        var comm=cc.comm, split=cc.split, basis=cc.basis, base=cc.base, grossComm=cc.grossComm, netComm=cc.netComm, calcNet=cc.calcNet, overridden=cc.overridden, coSplit=cc.coSplit, coAmt=cc.coAmt, afterCo=cc.afterCo;
         return (
           <Card key={tx.id} style={{marginTop:8}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
@@ -3101,11 +3103,21 @@ function PanelTx({txs,setTxs}) {
                   </div>
                   <div style={{fontSize:15,fontWeight:700,color:C.t2,marginLeft:"auto"}}>{fmtMoney(grossComm)}</div>
                 </div>
+                {/* Split the commission with a co-agent or referral — taken off the top */}
+                <div style={{borderTop:"1px solid "+C.aB,margin:"8px 0",paddingTop:8,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:C.t3,textTransform:"uppercase",letterSpacing:".06em",minWidth:78}}>Split w/ agent</div>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <input type="number" step="1" min="0" max="100" value={coSplit||""} placeholder="0" onChange={function(e){ updTx(tx.id,"coSplit",Number(e.target.value)||0); }} style={{...inp,width:54,fontSize:13,fontWeight:600,textAlign:"right"}} />
+                    <span style={{fontSize:13,color:C.t2}}>%  to</span>
+                    <input value={tx.coAgent||""} placeholder="co-agent / referral" onChange={function(e){ updTx(tx.id,"coAgent",e.target.value); }} style={{...inp,width:150,fontSize:12}} />
+                  </div>
+                  <div style={{fontSize:15,fontWeight:700,color:coSplit>0?C.ro:C.t3,marginLeft:"auto"}}>{coSplit>0?"− "+fmtMoney(coAmt):"—"}</div>
+                </div>
                 <div style={{borderTop:"1px solid "+C.aB,margin:"8px 0",paddingTop:8,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                   <div style={{fontSize:11,fontWeight:700,color:C.t3,textTransform:"uppercase",letterSpacing:".06em",minWidth:78}}>Your split</div>
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
                     <input type="number" step="1" min="0" max="100" value={split} onChange={function(e){ updTx(tx.id,"split",Number(e.target.value)||0); }} style={{...inp,width:62,fontSize:13,fontWeight:600,textAlign:"right"}} />
-                    <span style={{fontSize:13,color:C.t2}}>%  to you  ·  brokerage keeps {fmtMoney(grossComm-calcNet)}</span>
+                    <span style={{fontSize:13,color:C.t2}}>%  of {fmtMoney(afterCo)}  ·  brokerage keeps {fmtMoney(afterCo-calcNet)}</span>
                   </div>
                   <div style={{fontSize:17,fontWeight:700,color:C.t2,marginLeft:"auto"}}>= {fmtMoney(calcNet)}</div>
                 </div>
