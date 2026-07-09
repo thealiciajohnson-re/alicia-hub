@@ -2135,7 +2135,7 @@ const SOCIAL_PLATFORMS = [
 ];
 const BUFFER_URL = "https://publish.buffer.com/";
 const SOCIAL_TOPICS = [
-  {k:"market",    l:"📊 Market stat",   p:"a Sonoma County market-update post with one striking stat (median price ~$715K, ~28 days on market, or ~840 active listings) and what it means for buyers/sellers"},
+  {k:"market",    l:"📊 Market stat",   p:"a Sonoma County market-update post built around one striking stat from my current market data (median price, days on market, or active listings) and what it means for buyers/sellers"},
   {k:"listing",   l:"🏡 New listing",   p:"a 'Just Listed' teaser post for a Santa Rosa / Sonoma County home — build excitement, invite DMs for a private showing"},
   {k:"lifestyle", l:"🌅 Local lifestyle",p:"a warm local-lifestyle post about living in Sonoma County this season (farmers markets, Russian River, wineries) that builds local authority and invites replies"},
   {k:"tip",       l:"💡 Buyer/seller tip",p:"a quick, genuinely useful home buyer or seller tip for the Sonoma County market"},
@@ -2159,7 +2159,7 @@ const MANYCHAT_KEYWORDS = [
 // Which keyword best fits each post topic (used as the composer's suggested default).
 const TOPIC_KEYWORD = { market:"MARKET", listing:"HOME", lifestyle:"GUIDE", tip:"GUIDE", testimonial:"GUIDE", soldjust:"VALUE" };
 
-function PanelSocial({social,setSocial}) {
+function PanelSocial({social,setSocial,market}) {
   var [platform,setPlatform] = useState("instagram");
   var [topic,setTopic] = useState(SOCIAL_TOPICS[0].k);
   var [extra,setExtra] = useState("");
@@ -2189,8 +2189,10 @@ function PanelSocial({social,setSocial}) {
     var kw = (mcKey.trim() || TOPIC_KEYWORD[topic] || "HOME").toUpperCase();
     var kwInfo = MANYCHAT_KEYWORDS.find(function(x){ return x.k===kw; });
     var ctaBit = "Just before the hashtags, add a short call to action on its own line telling people to comment the word "+kw+" to get "+(kwInfo?kwInfo.use.toLowerCase():"the details")+" (this triggers an automated DM). ";
+    var mk = market || {};
+    var marketBit = (topic==="market") ? ("Use ONLY these current local stats — do not invent or change any numbers: median price "+(mk.median||"$715K")+", "+(mk.dom||"28")+" days on market, "+(mk.inv||"~840")+" active listings"+(mk.marketDate?" (as of "+mk.marketDate+")":"")+". ") : "";
     setLd(true); setDraft(""); setSt("");
-    callAI("Write "+t.p+". Platform: "+plat.l+". Voice: "+AGENT.name+", "+AGENT.co+", "+AGENT.city+" — warm, upbeat, professional, not salesy. "+(extra?("Extra detail to include: "+extra+". "):"")+"Keep it tight for social ("+(plat.id==="linkedin"?"up to ~120 words":"under ~60 words")+"). "+ctaBit+"Add 2–4 relevant local hashtags at the end (e.g. #SonomaCounty #SantaRosaRealEstate). Return only the post text, ready to paste.").then(function(txt){
+    callAI("Write "+t.p+". Platform: "+plat.l+". Voice: "+AGENT.name+", "+AGENT.co+", "+AGENT.city+" — warm, upbeat, professional, not salesy. "+marketBit+(extra?("Extra detail to include: "+extra+". "):"")+"Keep it tight for social ("+(plat.id==="linkedin"?"up to ~120 words":"under ~60 words")+"). "+ctaBit+"Add 2–4 relevant local hashtags at the end (e.g. #SonomaCounty #SantaRosaRealEstate). Return only the post text, ready to paste.").then(function(txt){
       var bad = !txt || txt.indexOf("⚠️")===0 || txt.indexOf("API error")===0 || txt.indexOf("Fetch error")===0;
       if(bad){ setSt(txt||"AI error — check your key."); } else { setDraft(txt); }
       setLd(false);
