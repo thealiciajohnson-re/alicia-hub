@@ -77,6 +77,9 @@ const AGENT = {
   web2: "https://excelleraterealestate.com/",
   photo: "https://photos.zillowstatic.com/fp/1896d8d0e6244cbbde5af305ddebfba2-h_l.jpg"   // Zillow-hosted headshot for email header (blank = "AJ" monogram)
 };
+// Authenticated (SPF/DKIM) sending domain for Brevo — best inbox placement.
+// Emails send from this address; replies route to AGENT.email (her real inbox).
+const BREVO_SENDER = "alicia@thealiciajohnsonhomes.com";
 
 // Bump this whenever the hub is updated, so you can confirm you're viewing the latest file.
 const BUILD = "Jul 2 · build 7";
@@ -948,7 +951,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     if(!l.email){ setSendMsg("No email on file — add one above first."); return; }
     setSendMsg("📨 Sending tracked email via Brevo…");
     var to=[{email:l.email, name:((l.first||"")+" "+(l.last||"")).trim()}];
-    callBrevo("send",{to:to, subject:emailSubject(l), html:brandedEmailHtml(curDraft(l), null, {footer:false}), senderEmail:AGENT.email, senderName:AGENT.name, replyTo:AGENT.email, tags:["crm-lead"]}).then(function(res){
+    callBrevo("send",{to:to, subject:emailSubject(l), html:brandedEmailHtml(curDraft(l), null, {footer:false}), senderEmail:BREVO_SENDER, senderName:AGENT.name, replyTo:AGENT.email, tags:["crm-lead"]}).then(function(res){
       if(res && res.messageId){
         logContact(l,"email sent via Brevo (tracked)");
         var day=toDay();
@@ -2357,7 +2360,7 @@ function PanelAnniv({leads,setLeads}){
     if(!body || !body.trim()){ flash("Draft the email first."); return; }
     setSendingId(c.l.id);
     var su="Happy "+c.years+"-Year Home Anniversary! 🎉";
-    callBrevo("send", { to:[{email:c.l.email, name:((c.l.first||"")+" "+(c.l.last||"")).trim()}], subject:su, html:brandedEmailHtml(body, su) }).then(function(res){
+    callBrevo("send", { to:[{email:c.l.email, name:((c.l.first||"")+" "+(c.l.last||"")).trim()}], subject:su, html:brandedEmailHtml(body, su), senderEmail:BREVO_SENDER, senderName:AGENT.name, replyTo:AGENT.email }).then(function(res){
       setSendingId(null);
       if(res && res.ok){ markSent(c); flash("✓ Sent to "+c.l.email+" via Brevo"); }
       else { flash("⚠️ Send failed: "+((res&&res.error)||(res&&res.data&&res.data.message)||"unknown")+" — deploy the brevo function + set BREVO_API_KEY."); }
@@ -2515,7 +2518,7 @@ function PanelAIEmail() {
     if(!to){ setSt("Add a valid email address in the To field to send via Brevo."); return; }
     if(!(form.subject||"").trim()){ setSt("Add a subject line to send via Brevo."); return; }
     setSt("📨 Sending tracked email via Brevo…");
-    callBrevo("send",{to:[{email:to}], subject:form.subject, html:brandedEmailHtml(email, null, {footer:false}), senderEmail:AGENT.email, senderName:AGENT.name, replyTo:AGENT.email, tags:["ai-email"]}).then(function(res){
+    callBrevo("send",{to:[{email:to}], subject:form.subject, html:brandedEmailHtml(email, null, {footer:false}), senderEmail:BREVO_SENDER, senderName:AGENT.name, replyTo:AGENT.email, tags:["ai-email"]}).then(function(res){
       if(res && res.messageId) setSt("✓ Sent via Brevo to "+to+" — opens & clicks will track in your Brevo dashboard.");
       else setSt("⚠️ Brevo send failed: "+((res&&res.error)||(res&&res.data&&res.data.message)||"unknown")+". Make sure your sender is verified in Brevo.");
     });
