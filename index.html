@@ -1514,6 +1514,16 @@ function PanelPipeline({deals,setDeals,setAct,leads}) {
     if (st===4 && !wasClosed) setAct(function(p){ return {...p,closed:p.closed+1}; });
     else if (st!==4 && wasClosed) setAct(function(p){ return {...p,closed:Math.max(0,p.closed-1)}; });
   }
+  var [showDead,setShowDead] = useState(false);
+  var [delDead,setDelDead] = useState(null);
+  // Move a deal out of the active pipeline when it falls through / cancels (reversible).
+  function markDead(id){
+    var d0 = (deals||[]).find(function(x){ return x.id===id; });
+    if (d0 && d0.stage===4) setAct(function(p){ return {...p,closed:Math.max(0,p.closed-1)}; });
+    setDeals(function(p){ return p.map(function(d){ return d.id===id?{...d,dead:true,deadDate:toDay()}:d; }); });
+  }
+  function reviveDeal(id){ setDeals(function(p){ return p.map(function(d){ return d.id===id?{...d,dead:false,deadDate:null}:d; }); }); }
+  function deleteDeal(id){ setDeals(function(p){ return p.filter(function(d){ return d.id!==id; }); }); setDelDead(null); }
   return (
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:14}}>Deal Pipeline</div>
@@ -1531,8 +1541,9 @@ function PanelPipeline({deals,setDeals,setAct,leads}) {
         </Card>
       )}
       {(function(){
-        var active = (deals||[]).filter(function(d){ return d.stage!==4; });
-        var closed = (deals||[]).filter(function(d){ return d.stage===4; });
+        var active = (deals||[]).filter(function(d){ return d.stage!==4 && !d.dead; });
+        var closed = (deals||[]).filter(function(d){ return d.stage===4 && !d.dead; });
+        var dead = (deals||[]).filter(function(d){ return d.dead; });
         return (
           <div>
             {deals.length===0 ? <div style={{color:C.t3,fontSize:13,marginTop:10}}>No deals yet.</div> : null}
@@ -1548,6 +1559,9 @@ function PanelPipeline({deals,setDeals,setAct,leads}) {
                     {DSTAGES.map(function(s,si){
                       return <div key={si} style={{flex:1,textAlign:"center",padding:"5px 2px",fontSize:11,borderRadius:6,cursor:"pointer",fontWeight:si===d.stage?600:400,background:si<d.stage?C.aL:si===d.stage?C.gL:C.s2,border:"1px solid "+(si<d.stage?C.aB:si===d.stage?C.gB:C.br),color:si<d.stage?C.ac:si===d.stage?C.go:C.t3}} onClick={function(){ setStage(d.id,si); }}>{s}</div>;
                     })}
+                  </div>
+                  <div style={{display:"flex",justifyContent:"flex-end",marginTop:7}}>
+                    <Btn v="rose" style={{fontSize:10,padding:"3px 9px"}} onClick={function(){ markDead(d.id); }} title="Deal fell through or was cancelled — moves it out of the active pipeline (you can restore it later)">✕ Fell through / cancel</Btn>
                   </div>
                 </Card>
               );
@@ -1569,6 +1583,36 @@ function PanelPipeline({deals,setDeals,setAct,leads}) {
                         </div>
                         <Tag t="hot">✅ Closed</Tag>
                         <Btn style={{fontSize:10,padding:"3px 8px"}} onClick={function(){ setStage(d.id,3); }} title="Move back to In Escrow">↩ Reopen</Btn>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+            {/* Fell through / cancelled — archived out of the active pipeline */}
+            {dead.length>0 && (
+              <div style={{marginTop:18}}>
+                <div onClick={function(){ setShowDead(function(p){ return !p; }); }} style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",borderTop:"2px solid "+C.br,paddingTop:14,marginBottom:4}}>
+                  <div style={{fontSize:15,fontWeight:700,color:C.t2}}>✕ Fell Through / Cancelled <span style={{fontSize:12,fontWeight:400,color:C.t3}}>{dead.length}</span></div>
+                  <span style={{marginLeft:"auto",fontSize:12,color:C.t3}}>{showDead?"▾ hide":"▸ show"}</span>
+                </div>
+                {showDead && dead.map(function(d){
+                  return (
+                    <Card key={d.id} style={{marginTop:8,background:C.s2,border:"1px solid "+C.br,opacity:.9}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                        <div style={{flex:1,minWidth:180}}>
+                          <div style={{fontSize:14,fontWeight:600,color:C.t2}}>{d.addr}</div>
+                          <div style={{fontSize:12,color:C.t3}}>{d.client} · {d.type}{d.price?" · "+fmtMoney(d.price):""}{d.deadDate?" · Fell through "+fmtDate(d.deadDate):""}</div>
+                        </div>
+                        <Btn style={{fontSize:10,padding:"3px 8px"}} onClick={function(){ reviveDeal(d.id); }} title="Put this deal back into the active pipeline">↩ Restore</Btn>
+                        {delDead===d.id
+                          ? <span style={{display:"inline-flex",alignItems:"center",gap:5}}>
+                              <span style={{fontSize:11,color:C.ro}}>Delete for good?</span>
+                              <Btn v="rose" style={{fontSize:10,padding:"3px 8px"}} onClick={function(){ deleteDeal(d.id); }}>Yes</Btn>
+                              <Btn style={{fontSize:10,padding:"3px 8px"}} onClick={function(){ setDelDead(null); }}>No</Btn>
+                            </span>
+                          : <Btn v="rose" style={{fontSize:10,padding:"3px 8px"}} onClick={function(){ setDelDead(d.id); }}>Delete</Btn>
+                        }
                       </div>
                     </Card>
                   );
