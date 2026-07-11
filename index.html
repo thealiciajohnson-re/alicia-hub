@@ -520,7 +520,7 @@ function App() {
   const [market, setMarket] = useState({
     rates:[{name:"30-year fixed",val:"6.89%",chg:"+0.08% wk",dir:"up"},{name:"15-year fixed",val:"6.17%",chg:"flat",dir:"flat"},{name:"5/1 ARM",val:"6.12%",chg:"−0.05% wk",dir:"down"}],
     ratesDate:"June 8, 2026", ratesSrc:"Freddie Mac",
-    median:"$715K", dom:"28", inv:"~840", marketDate:"June 2026"
+    median:"$715K", dom:"28", inv:"~840", marketDate:"June 2026", cities:[]
   });
   const [social, setSocial] = useState([]);   // social content calendar (posts across platforms)
   const [dismissed, setDismissed] = useState([]);   // deleted leads (tombstones) so FUB sync won't re-add them
@@ -673,7 +673,7 @@ function App() {
           <div style={{fontSize:11,color:C.t3}}>{AGENT.co} · {AGENT.phone} · {AGENT.email}</div>
         </div>
         <div style={{display:"flex",gap:18,marginRight:8}}>
-          {[["Leads",leads.length,C.ac],["Appts",act.appts,C.go],["Listings",act.listings,C.tx],["Closed",act.closed,C.ro]].map(function(item){
+          {[["Leads",leads.length,C.ac],["Appts",(deals||[]).filter(function(d){ return !d.dead && d.stage===1; }).length,C.go],["Listings",(deals||[]).filter(function(d){ return !d.dead && d.type==="Listing" && d.stage>=2 && d.stage<4; }).length,C.tx],["Closed",(deals||[]).filter(function(d){ return !d.dead && d.stage===4; }).length,C.ro]].map(function(item){
             return <div key={item[0]} style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:700,color:item[2],fontFamily:"monospace"}}>{item[1]}</div><div style={{fontSize:9,color:C.t3,textTransform:"uppercase",letterSpacing:".07em"}}>{item[0]}</div></div>;
           })}
         </div>
@@ -3560,6 +3560,15 @@ function PanelRates({market,setMarket}) {
 }
 
 /* ── MARKET DATA ─────────────────────────────────────────────── */
+// Cities Alicia tracks (primary ZIP each) — pulled individually from Realtor.com.
+const MARKET_CITIES = [
+  {name:"Windsor", zip:"95492"},
+  {name:"Healdsburg", zip:"95448"},
+  {name:"Santa Rosa", zip:"95403"},
+  {name:"Rohnert Park", zip:"94928"},
+  {name:"Petaluma", zip:"94952"},
+  {name:"Sonoma", zip:"95476"}
+];
 function PanelMarket({market,setMarket}) {
   var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
   var [report,setReport] = useState("");
@@ -3567,54 +3576,71 @@ function PanelMarket({market,setMarket}) {
   var [busy,setBusy] = useState(false); var [msg,setMsg] = useState("");
   function runAI(p){ setReport(""); setAL(true); callAI(p).then(function(t){ setAT(t); setAL(false); }); }
   function refreshMarket(){
-    setBusy(true); setMsg("");
-    fetch(SUPABASE_URL + "/functions/v1/market", {headers:{"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+SUPABASE_ANON_KEY}})
-      .then(function(r){ return r.json(); })
-      .then(function(d){
-        setBusy(false);
-        if(d.error){ setMsg("⚠️ "+d.error+" (If you just set it up, give it a minute.)"); return; }
-        setMarket(function(m){ return {...m, median:d.median||m.median, dom:d.dom||m.dom, inv:d.inv||m.inv, marketDate:d.marketDate||m.marketDate}; });
-        setMsg("✓ Updated from Realtor.com"+(d.marketDate?" — "+d.marketDate:"")+(d.note?" ("+d.note+")":""));
-      })
-      .catch(function(e){ setBusy(false); setMsg("⚠️ Couldn't reach the market service. Make sure the 'market' function is deployed."); });
+    setBusy(true); setMsg("Pulling "+MARKET_CITIES.length+" cities from Realtor.com…");
+    var h = {headers:{"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+SUPABASE_ANON_KEY}};
+    Promise.all(MARKET_CITIES.map(function(c){
+      return fetch(SUPABASE_URL+"/functions/v1/market?zip="+c.zip, h)
+        .then(function(r){ return r.json(); })
+        .then(function(d){ return {name:c.name, zip:c.zip, median:(d&&d.median)||"—", dom:(d&&d.dom)||"—", inv:(d&&d.inv)||"—", marketDate:(d&&d.marketDate)||""}; })
+        .catch(function(){ return {name:c.name, zip:c.zip, median:"—", dom:"—", inv:"—", marketDate:""}; });
+    })).then(function(rows){
+      setBusy(false);
+      var ok = rows.filter(function(r){ return r.median && r.median!=="—"; });
+      if(!ok.length){ setMsg("⚠️ Couldn't reach the market service. Make sure the 'market' function is deployed."); return; }
+      var sr = rows.find(function(r){ return r.name==="Santa Rosa" && r.median!=="—"; }) || ok[0];
+      var period = (ok[0] && ok[0].marketDate) || todayLabel();
+      setMarket(function(m){ return {...m, cities:rows, median:sr.median, dom:sr.dom, inv:sr.inv, marketDate:period}; });
+      setMsg("✓ Updated "+ok.length+" of "+rows.length+" cities from Realtor.com"+(period?" — "+period:""));
+    });
   }
   function mf(k){ return function(e){ var v=e.target.value; setMarket(function(m){ return {...m,[k]:v}; }); }; }
   function todayLabel(){ try{ return new Date().toLocaleDateString("en-US",{month:"long",year:"numeric"}); }catch(e){ return "today"; } }
   function pullReport(){
     setAT("");
     var rate30 = (market.rates&&market.rates[0]) ? market.rates[0].val : "—";
-    var lines = [
-      "📊 "+(market.marketDate||"Current")+" — Sonoma County Market Snapshot",
-      "",
-      "• Median price: "+market.median,
-      "• Average days on market: "+market.dom+" days",
-      "• Active listings: "+market.inv+" (county-wide)",
-      "• 30-yr fixed rate: "+rate30,
-      "",
-      (Number(String(market.dom).replace(/[^0-9.]/g,""))<=30 ? "Homes are moving quickly — well-priced listings tend to go in under a month. A balanced-to-seller's market." : "Homes are taking a bit longer to sell — buyers have more room to negotiate."),
-      "",
-      "Source: your saved figures · update them anytime with “Edit figures”."
-    ];
+    var cs = market.cities||[];
+    var lines = ["📊 "+(market.marketDate||"Current")+" — Local Market Snapshot",""];
+    if(cs.length){
+      cs.forEach(function(c){ lines.push("• "+c.name+", CA — median "+c.median+" · "+c.dom+" days on market · "+c.inv+" active"); });
+    } else {
+      lines.push("• Median price: "+market.median, "• Average days on market: "+market.dom+" days", "• Active listings: "+market.inv);
+    }
+    lines.push("", "• 30-yr fixed rate: "+rate30, "", "Source: Realtor.com by ZIP · tap 🔄 Refresh from web to update.");
     setReport(lines.join("\n"));
   }
-  var cards = [["Median Price",market.median,"Sonoma County"],["Days on Market",market.dom,"avg. active"],["Active Listings",market.inv,"county-wide"]];
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:14}}>
         <div style={{fontSize:18,fontWeight:700}}>Market Data</div>
-        <Btn onClick={function(){ setEdit(function(s){ return !s; }); }} style={{fontSize:11}}>{edit?"Done":"✎ Edit figures"}</Btn>
+        <Btn onClick={function(){ setEdit(function(s){ return !s; }); }} style={{fontSize:11}}>{edit?"Done":"✎ Edit default figures"}</Btn>
       </div>
-      {edit ? (
-        <Card title="Update market figures">
+      {edit && (
+        <Card title="Default figures — used in AI emails & social when no specific city is chosen">
           <Row cols="1fr 1fr"><Fld label="Median price"><input style={inp} value={market.median} onChange={mf("median")} /></Fld><Fld label="Days on market"><input style={inp} value={market.dom} onChange={mf("dom")} /></Fld></Row>
           <Row cols="1fr 1fr"><Fld label="Active listings"><input style={inp} value={market.inv} onChange={mf("inv")} /></Fld><Fld label="Period label"><input style={inp} value={market.marketDate} onChange={mf("marketDate")} placeholder="June 2026" /></Fld></Row>
           <Btn v="primary" onClick={function(){ setMarket(function(m){ return {...m,marketDate:m.marketDate||todayLabel()}; }); setEdit(false); }}>Save</Btn>
         </Card>
-      ) : (
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:10}}>
-          {cards.map(function(x){ return <div key={x[0]} style={{background:C.s2,borderRadius:8,padding:"10px 12px",border:"1px solid "+C.br}}><div style={{fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em",color:C.t3,marginBottom:3}}>{x[0]}</div><div style={{fontSize:24,fontWeight:700,fontFamily:"monospace"}}>{x[1]}</div><div style={{fontSize:11,color:C.t3,marginTop:3}}>{x[2]}</div></div>; })}
-        </div>
       )}
+      <Card title={"Local Market by City" + (market.marketDate?" — "+market.marketDate:"")}>
+        {(!market.cities || !market.cities.length) ? (
+          <div style={{color:C.t3,fontSize:13,lineHeight:1.5}}>Tap <b>🔄 Refresh from web</b> below to pull the latest median price, days on market &amp; active listings for <b>Windsor, Healdsburg, Santa Rosa, Rohnert Park, Petaluma &amp; Sonoma</b>.</div>
+        ) : (
+          <div>
+            <div style={{display:"flex",alignItems:"center",padding:"0 0 6px",borderBottom:"2px solid "+C.br,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",color:C.t3}}>
+              <div style={{flex:1.5}}>City</div><div style={{flex:1,textAlign:"right"}}>Median</div><div style={{flex:1,textAlign:"right"}}>Days</div><div style={{flex:1,textAlign:"right"}}>Active</div>
+            </div>
+            {market.cities.map(function(c){
+              return <div key={c.zip} style={{display:"flex",alignItems:"center",padding:"9px 0",borderBottom:"1px solid "+C.br}}>
+                <div style={{flex:1.5,fontSize:13,fontWeight:600}}>{c.name}, CA</div>
+                <div style={{flex:1,textAlign:"right",fontFamily:"monospace",fontSize:13,fontWeight:600}}>{c.median}</div>
+                <div style={{flex:1,textAlign:"right",fontFamily:"monospace",fontSize:13,color:C.t2}}>{c.dom}</div>
+                <div style={{flex:1,textAlign:"right",fontFamily:"monospace",fontSize:13,color:C.t2}}>{c.inv}</div>
+              </div>;
+            })}
+            <div style={{fontSize:10.5,color:C.t3,marginTop:8}}>Median list price by primary ZIP · Realtor.com</div>
+          </div>
+        )}
+      </Card>
       {msg && <div style={{fontSize:12,color:msg.indexOf("⚠️")===0?C.ro:C.ac,marginBottom:8}}>{msg}</div>}
       <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:8}}>
         <Btn v="primary" onClick={refreshMarket}>{busy?"⏳ Pulling…":"🔄 Refresh from web"}</Btn>
