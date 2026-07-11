@@ -167,26 +167,26 @@ function dedupeLeads(list){
 }
 
 /* ── Recurring reminders ─────────────────────────────────────── */
-const REPLBL = { none:"One-time", weekly:"Weekly", monthly:"Monthly" };
+const REPLBL = { none:"One-time", weekly:"Weekly", biweekly:"Bi-weekly", monthly:"Monthly" };
 function nextDate(date, repeat){
   if(!date || !repeat || repeat==="none") return null;
   var d = new Date(date+"T12:00:00");
   if(repeat==="weekly") d.setDate(d.getDate()+7);
+  else if(repeat==="biweekly") d.setDate(d.getDate()+14);
   else if(repeat==="monthly") d.setMonth(d.getMonth()+1);
   else return null;
   return d.toISOString().split("T")[0];
 }
 // Toggle done; when completing a recurring reminder, spawn its next occurrence.
+// Completing a reminder: one-time reminders drop off the list; weekly/monthly ones are
+// NOT deleted — they roll forward to the next occurrence and stay active.
 function toggleRem(setRems, r){
   setRems(function(p){
-    var out = p.map(function(x){ return x.id===r.id?{...x,done:!x.done}:x; });
-    if(!r.done && r.repeat && r.repeat!=="none"){
+    if(r.repeat && r.repeat!=="none"){
       var nd = nextDate(r.date, r.repeat);
-      if(nd && !out.some(function(x){ return x.leadId===r.leadId && x.title===r.title && x.date===nd && !x.done; })){
-        out.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),title:r.title,note:r.note||"",date:nd,time:r.time||"",type:r.type,leadId:r.leadId||"",repeat:r.repeat,done:false});
-      }
+      return p.map(function(x){ return x.id===r.id ? {...x, date:(nd||x.date), done:false} : x; });
     }
-    return out;
+    return p.filter(function(x){ return x.id!==r.id; });
   });
 }
 const DSTAGES = ["Lead","Appointment","Listed","In Escrow","Closed"];
@@ -647,6 +647,7 @@ function App() {
   if (!ready) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:C.bg,color:C.t3,fontSize:14,fontFamily:"system-ui"}}>Loading your hub…</div>;
 
   const pendRem = rems.filter(function(r){ return !r.done; }).length;
+  const watchN = leads.filter(function(l){ return l.prospect; }).length;
   const dueToday = leads.filter(function(l){ return l.fu && l.fu <= toDay(); }).length;
   const nurtureDueN = leads.filter(nurtureDue).length;
   const socialDueN = social.filter(function(p){ return p.status!=="posted" && p.date && p.date <= toDay(); }).length;
@@ -654,7 +655,7 @@ function App() {
 
   const NAV = [
     {s:"Daily",items:[{id:"dashboard",l:"Dashboard"},{id:"calendar",l:"Today"},{id:"rems",l:"Reminders",b:pendRem}]},
-    {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"}]},
+    {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired / FSBO",b:watchN}]},
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
@@ -714,6 +715,7 @@ function App() {
           {tab==="leads"     && <PanelLeads {...pp} />}
           {tab==="addlead"   && <PanelAddLead {...pp} />}
           {tab==="pipeline"  && <PanelPipeline {...pp} />}
+          {tab==="watch"     && <PanelWatch {...pp} />}
           {tab==="actionplans" && <PanelActionPlans {...pp} />}
           {tab==="nurture"   && <PanelNurture {...pp} />}
           {tab==="listings"  && <PanelListings {...pp} />}
@@ -740,30 +742,78 @@ function App() {
   );
 }
 
+/* ── EXPIRED / FSBO WATCHLIST ────────────────────────────────── */
+function PanelWatch({leads,setFocusLead,setTab}) {
+  var expired = (leads||[]).filter(function(l){ return l.prospect==="expired"; });
+  var fsbo = (leads||[]).filter(function(l){ return l.prospect==="fsbo"; });
+  function open(l){ if(setFocusLead) setFocusLead(l.id); setTab("leads"); }
+  function row(l){
+    return (
+      <div key={l.id} onClick={function(){ open(l); }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid "+C.br,cursor:"pointer"}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:600}}>{l.first} {l.last}</div>
+          <div style={{fontSize:11,color:C.t3}}>{l.addr||"—"}{l.phone?" · "+l.phone:""}{l.lc?" · last contact "+fmtDate(l.lc):" · not contacted yet"}</div>
+        </div>
+        <Tag t={l.temp==="hot"?"hot":l.temp==="warm"?"warm":"new"}>{l.temp}</Tag>
+        <span style={{fontSize:11,color:C.ac}}>Open →</span>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>🎯 Expired / FSBO Watchlist</div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:660}}>Homeowners worth prospecting — <b>expired listings</b> (didn't sell with their last agent) and <b>FSBO</b> (for sale by owner). Add anyone to this list from their lead card with the <b>🎯 Expired</b> / <b>🎯 FSBO</b> buttons. Tap a name to open their profile and reach out.</div>
+      <Card title={"⏳ Expired Listings (" + expired.length + ")"}>
+        {expired.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — open a lead and tap 🎯 Expired to add them here.</div> : expired.map(row)}
+      </Card>
+      <Card title={"🏷️ For Sale By Owner (" + fsbo.length + ")"}>
+        {fsbo.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — open a lead and tap 🎯 FSBO to add them here.</div> : fsbo.map(row)}
+      </Card>
+    </div>
+  );
+}
+
 /* ── DASHBOARD ───────────────────────────────────────────────── */
 function PanelDash({leads,rems,deals,act,goals,setTab}) {
   var td = toDay();
   var todayR = rems.filter(function(r){ return r.date===td && !r.done; });
   var hot = leads.filter(function(l){ return l.temp==="hot"; }).slice(0,5);
+  // Live, self-correcting stats derived from real data (no more drifting manual counters).
+  var wkAgo = (function(){ var d=new Date(); d.setDate(d.getDate()-7); return d.toISOString().split("T")[0]; })();
+  var liveDeals = (deals||[]).filter(function(d){ return !d.dead; });
+  var cancelledDeals = (deals||[]).filter(function(d){ return d.dead; });
+  var live = {
+    leads:   (leads||[]).filter(function(l){ return (l.added||"") >= wkAgo; }).length,
+    appts:   liveDeals.filter(function(d){ return d.stage===1; }).length,
+    listings:liveDeals.filter(function(d){ return d.type==="Listing" && d.stage>=2 && d.stage<4; }).length,
+    closed:  liveDeals.filter(function(d){ return d.stage===4; }).length
+  };
   return (
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:14}}>Dashboard</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}}>
-        {[["New Leads",act.leads,C.aL,C.ac,C.aB],["Appointments",act.appts,C.gL,C.go,C.gB],["Listings",act.listings,C.s2,C.tx,C.br],["Closed",act.closed,C.rL,C.ro,C.rB]].map(function(x){
-          return <div key={x[0]} style={{background:x[2],border:"1px solid "+x[4],borderRadius:9,padding:"10px 12px"}}><div style={{fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em",color:C.t3,marginBottom:3}}>{x[0]}</div><div style={{fontSize:26,fontWeight:700,color:x[3],lineHeight:1,fontFamily:"monospace"}}>{x[1]}</div><div style={{fontSize:11,color:C.t3,marginTop:3}}>this week</div></div>;
+        {[["New Leads",live.leads,C.aL,C.ac,C.aB,"added · past 7 days"],["Appointments",live.appts,C.gL,C.go,C.gB,"deals at appt stage"],["Listings",live.listings,C.s2,C.tx,C.br,"active on market"],["Closed",live.closed,C.rL,C.ro,C.rB,"closed deals"]].map(function(x){
+          return <div key={x[0]} style={{background:x[2],border:"1px solid "+x[4],borderRadius:9,padding:"10px 12px"}}><div style={{fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em",color:C.t3,marginBottom:3}}>{x[0]}</div><div style={{fontSize:26,fontWeight:700,color:x[3],lineHeight:1,fontFamily:"monospace"}}>{x[1]}</div><div style={{fontSize:11,color:C.t3,marginTop:3}}>{x[5]}</div></div>;
         })}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <div>
           <Card title="Weekly Goal Progress">
-            {["leads","appts","listings","closed"].map(function(k){ return <GBar key={k} label={{leads:"New Leads",appts:"Appointments",listings:"Listings",closed:"Closed"}[k]} actual={act[k]} goal={goals[k]} />; })}
+            {["leads","appts","listings","closed"].map(function(k){ return <GBar key={k} label={{leads:"New Leads",appts:"Appointments",listings:"Listings",closed:"Closed"}[k]} actual={live[k]} goal={goals[k]} />; })}
             <Btn v="primary" onClick={function(){ setTab("goals"); }} style={{marginTop:4,fontSize:11}}>Update goals →</Btn>
           </Card>
           <Card title="Active Deals">
-            {deals.length===0 ? <div style={{color:C.t3,fontSize:13}}>No deals yet.</div> : deals.slice(0,5).map(function(d){
+            {liveDeals.length===0 ? <div style={{color:C.t3,fontSize:13}}>No deals yet.</div> : liveDeals.slice(0,5).map(function(d){
               return <div key={d.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:"1px solid "+C.br}}><div style={{flex:1}}><div style={{fontSize:13,fontWeight:500}}>{d.addr}</div><div style={{fontSize:11,color:C.t3}}>{d.client} · {DSTAGES[d.stage]}{d.price?" · "+fmtMoney(d.price):""}</div></div><Tag t="warm">{DSTAGES[d.stage]}</Tag></div>;
             })}
           </Card>
+          {cancelledDeals.length>0 && (
+            <Card title={"✕ Cancelled / Fell Through (" + cancelledDeals.length + ")"}>
+              {cancelledDeals.slice(0,6).map(function(d){
+                return <div key={d.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:"1px solid "+C.br}}><div style={{flex:1}}><div style={{fontSize:13,fontWeight:500,color:C.t2}}>{d.addr}</div><div style={{fontSize:11,color:C.t3}}>{d.client} · {d.type}{d.price?" · "+fmtMoney(d.price):""}{d.deadDate?" · "+fmtDate(d.deadDate):""}</div></div><Tag t="cold">Cancelled</Tag></div>;
+              })}
+            </Card>
+          )}
         </div>
         <div>
           <Card title="Today's Reminders">
@@ -820,7 +870,7 @@ function PanelCal({rems,leads,setRems,setTab}) {
               return <div key={r.id} style={{display:"flex",gap:10,padding:"7px 0",borderBottom:"1px solid "+C.br,opacity:r.done?0.5:1}}>
                 <div style={{fontSize:12,color:C.t2,minWidth:62,fontFamily:"monospace"}}>{r.time||"—"}</div>
                 <div style={{flex:1}}><div style={{fontSize:13,fontWeight:500,textDecoration:r.done?"line-through":"none"}}>{r.title} <Tag t="new">{r.type}</Tag></div>{r.leadId && leadName(r.leadId) && <div style={{fontSize:12,color:C.t3}}>👤 {leadName(r.leadId)}</div>}</div>
-                <Btn onClick={function(){ toggleRem(setRems, r); }} style={{fontSize:10,padding:"3px 8px"}}>{r.done?"Undo":"Done"}</Btn>
+                <Btn onClick={function(){ toggleRem(setRems, r); }} style={{fontSize:10,padding:"3px 8px"}} title={r.repeat&&r.repeat!=="none"?"Complete this one — the recurring reminder rolls forward to next "+REPLBL[r.repeat].toLowerCase():"Complete & remove from list"}>✓ Done</Btn>
               </div>;
             })
         }
@@ -832,7 +882,7 @@ function PanelCal({rems,leads,setRems,setTab}) {
               return <div key={r.id} style={{display:"flex",gap:10,padding:"7px 0",borderBottom:"1px solid "+C.br,opacity:r.done?0.5:1}}>
                 <div style={{fontSize:12,color:C.t2,minWidth:62,fontFamily:"monospace"}}>{r.time||"—"}</div>
                 <div style={{flex:1}}><div style={{fontSize:13,fontWeight:500,textDecoration:r.done?"line-through":"none"}}>{r.title} <Tag t="new">{r.type}</Tag></div>{r.leadId && leadName(r.leadId) && <div style={{fontSize:12,color:C.t3}}>👤 {leadName(r.leadId)}</div>}</div>
-                <Btn onClick={function(){ toggleRem(setRems, r); }} style={{fontSize:10,padding:"3px 8px"}}>{r.done?"Undo":"Done"}</Btn>
+                <Btn onClick={function(){ toggleRem(setRems, r); }} style={{fontSize:10,padding:"3px 8px"}} title={r.repeat&&r.repeat!=="none"?"Complete this one — the recurring reminder rolls forward to next "+REPLBL[r.repeat].toLowerCase():"Complete & remove from list"}>✓ Done</Btn>
               </div>;
             })
         }
@@ -876,7 +926,7 @@ function PanelRems({rems,leads,setRems}) {
         </Row>
         <Row cols="1fr 1fr 1fr">
           <Fld label="Type"><select style={inp} value={form.type} onChange={fld("type")}><option value="appt">Appointment</option><option value="follow">Follow-up</option><option value="email">Send email</option><option value="urgent">Urgent</option><option value="other">Other</option></select></Fld>
-          <Fld label="Repeat"><select style={inp} value={form.repeat} onChange={fld("repeat")}><option value="none">One-time</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></Fld>
+          <Fld label="Repeat"><select style={inp} value={form.repeat} onChange={fld("repeat")}><option value="none">One-time</option><option value="weekly">Weekly</option><option value="biweekly">Bi-weekly</option><option value="monthly">Monthly</option></select></Fld>
           <Fld label="Lead (optional)"><select style={inp} value={form.leadId} onChange={fld("leadId")}><option value="">— unlinked —</option>{leads.map(function(l){ return <option key={l.id} value={l.id}>{l.first} {l.last}</option>; })}</select></Fld>
         </Row>
         <div style={{display:"flex",gap:7}}>
@@ -885,6 +935,28 @@ function PanelRems({rems,leads,setRems}) {
         </div>
         {st && <div style={{fontSize:12,color:C.ac,marginTop:5}}>{st}</div>}
       </Card>
+      {(function(){
+        var recurring = rems.filter(function(r){ return r.repeat && r.repeat!=="none"; }).sort(function(a,b){ return a.date>b.date?1:-1; });
+        if(!recurring.length) return null;
+        return (
+          <Card title={"🔁 Recurring Reminders (" + recurring.length + ")"}>
+            <div style={{fontSize:11,color:C.t3,marginBottom:6}}>Weekly, bi-weekly & monthly reminders that keep coming back. Completing one just rolls it to the next date — use 🗑 to stop the series.</div>
+            {recurring.map(function(r){
+              return (
+                <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:"1px solid "+C.br}}>
+                  <div style={{width:8,height:8,borderRadius:"50%",background:dc[r.type]||C.t3,flexShrink:0}} />
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:500}}>{r.title} <span style={{fontSize:10,color:C.sk,marginLeft:4,fontWeight:600}}>🔁 {REPLBL[r.repeat]}</span></div>
+                    <div style={{fontSize:11,color:C.t3}}>Next: {fmtDate(r.date)}{r.time?" · "+r.time:""}{r.leadId?(function(){ var L=leads.find(function(x){ return x.id===r.leadId; }); return L?" · 👤 "+L.first+" "+L.last:""; })():""}</div>
+                  </div>
+                  <Btn onClick={function(){ edit(r); }} style={{fontSize:10,padding:"3px 8px"}}>Edit</Btn>
+                  <Btn v="rose" onClick={function(){ del(r.id); }} style={{fontSize:10,padding:"3px 9px"}} title="Delete this recurring reminder for good">🗑 Clear</Btn>
+                </div>
+              );
+            })}
+          </Card>
+        );
+      })()}
       <Card title={"Upcoming (" + rems.filter(function(r){ return !r.done; }).length + " pending)"}>
         {doneCount>0 && <div style={{textAlign:"right",marginBottom:4}}><span style={{fontSize:11,color:C.ro,cursor:"pointer"}} onClick={clearDone}>Clear {doneCount} completed ✕</span></div>}
         {sorted.length===0 ? <div style={{color:C.t3,fontSize:13}}>No reminders yet.</div> : sorted.map(function(r){
@@ -895,7 +967,7 @@ function PanelRems({rems,leads,setRems}) {
                 <div style={{fontSize:13,fontWeight:500,textDecoration:r.done?"line-through":"none"}}>{r.title}{r.repeat&&r.repeat!=="none"?<span style={{fontSize:10,color:C.sk,marginLeft:5}}>🔁 {REPLBL[r.repeat]}</span>:null}</div>
                 <div style={{fontSize:11,color:C.t3}}>{fmtDate(r.date)}{r.time?" · "+r.time:""} · {r.type}{r.leadId?(function(){ var L=leads.find(function(x){ return x.id===r.leadId; }); return L?" · 👤 "+L.first+" "+L.last:""; })():""}</div>
               </div>
-              <Btn onClick={function(){ toggleRem(setRems, r); }} style={{fontSize:10,padding:"3px 8px"}}>{r.done?"Undo":"Done"}</Btn>
+              <Btn onClick={function(){ toggleRem(setRems, r); }} style={{fontSize:10,padding:"3px 8px"}} title={r.repeat&&r.repeat!=="none"?"Complete this one — the recurring reminder rolls forward to next "+REPLBL[r.repeat].toLowerCase():"Complete & remove from list"}>✓ Done</Btn>
               <Btn onClick={function(){ edit(r); }} style={{fontSize:10,padding:"3px 8px"}}>Edit</Btn>
               <Btn v="rose" onClick={function(){ del(r.id); }} style={{fontSize:10,padding:"3px 8px"}} title="Delete">🗑</Btn>
             </div>
@@ -907,11 +979,12 @@ function PanelRems({rems,leads,setRems}) {
 }
 
 /* ── ALL LEADS ───────────────────────────────────────────────── */
-function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFocusLead,listings,setRems,setDeals,setAct,market,pullFromFub,dismissLead}) {
+function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFocusLead,listings,rems,setRems,setDeals,setAct,market,pullFromFub,dismissLead}) {
   var [selListing,setSelListing] = useState("");
   var [fuDraft,setFuDraft] = useState("");
   var [fuNote,setFuNote] = useState("");
   var [fuRepeat,setFuRepeat] = useState("none");
+  var [fuMsg,setFuMsg] = useState("");
   var [srch,setSrch] = useState(""); var [fT,setFT] = useState(""); var [fTp,setFTp] = useState(""); var [fS,setFS] = useState("");
   var [sortKey,setSortKey] = useState(""); var [sortDir,setSortDir] = useState(1);
   var [modal,setModal] = useState(null); var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
@@ -1018,6 +1091,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
       setFuDraft(modal.fu||toDay());
       setFuNote("");
       setFuRepeat("none");
+      setFuMsg("");
       setSendMsg("");
     }
   }, [_mid]);
@@ -1025,6 +1099,22 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   function saveContact(field, val) {
     setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,[field]:val}:l; }); });
     setModal(function(m){ return {...m,[field]:val}; });
+  }
+  // Clear any recurring (weekly/bi-weekly/monthly) reminder attached to this lead.
+  function clearRecurring(){
+    if(!modal) return;
+    setRems(function(p){ return p.filter(function(r){ return !(r.leadId===modal.id && r.repeat && r.repeat!=="none"); }); });
+    setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,fu:""}:l; }); });
+    setModal(function(m){ return {...m,fu:""}; });
+    setFuMsg("✓ Recurring reminder cleared for this lead.");
+    setSendMsg("Recurring reminder cleared.");
+  }
+  // Flag a lead as an Expired listing / FSBO prospect (toggles onto the watchlist).
+  function setProspect(val){
+    var nv = (modal.prospect===val) ? "" : val;
+    setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,prospect:nv}:l; }); });
+    setModal(function(m){ return {...m,prospect:nv}; });
+    setSendMsg(nv ? ("🎯 Added to your "+(nv==="expired"?"Expired listings":"FSBO")+" watchlist. See it under Expired / FSBO.") : "Removed from the Expired / FSBO watchlist.");
   }
 
   function setFollowAlert(){
@@ -1036,7 +1126,9 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     if(setRems) setRems(function(p){
       return [...p,{id:uid(),title:title,note:fuNote.trim(),date:fuDraft,time:"09:00",type:"follow",repeat:fuRepeat,done:false,leadId:modal.id}];
     });
-    setSendMsg("🔔 Alert set for "+fmtDate(fuDraft)+(fuRepeat!=="none"?" ("+REPLBL[fuRepeat].toLowerCase()+")":"")+(fuNote.trim()?" — "+fuNote.trim():"")+". It'll show in Reminders & on your Dashboard.");
+    var conf = "✓ Reminder set — "+(fuRepeat!=="none"?"repeats "+REPLBL[fuRepeat].toLowerCase()+", starting ":"")+fmtDate(fuDraft)+(fuNote.trim()?" — "+fuNote.trim():"")+". It'll show in Reminders & on your Dashboard.";
+    setFuMsg(conf);
+    setSendMsg(conf);
     setFuNote(""); setFuRepeat("none");
   }
 
@@ -1309,10 +1401,20 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
               <input style={{...inp,fontSize:12,marginBottom:5}} placeholder="Optional note — e.g. discuss pricing, send comps, check financing" value={fuNote} onChange={function(e){ setFuNote(e.target.value); }} />
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                 <input type="date" style={{...inp,width:150,fontSize:12}} value={fuDraft} onChange={function(e){ setFuDraft(e.target.value); }} />
-                <select style={{...inp,width:115,fontSize:12}} value={fuRepeat} onChange={function(e){ setFuRepeat(e.target.value); }} title="Repeat"><option value="none">One-time</option><option value="weekly">Repeat weekly</option><option value="monthly">Repeat monthly</option></select>
+                <select style={{...inp,width:125,fontSize:12}} value={fuRepeat} onChange={function(e){ setFuRepeat(e.target.value); }} title="Repeat"><option value="none">One-time</option><option value="weekly">Repeat weekly</option><option value="biweekly">Repeat bi-weekly</option><option value="monthly">Repeat monthly</option></select>
                 <Btn v="primary" style={{fontSize:11}} onClick={setFollowAlert}>Set alert</Btn>
                 {modal.fu && <span style={{fontSize:11,color:modal.fu<=toDay()?C.ro:C.t3}}>Currently: {fmtDate(modal.fu)}</span>}
               </div>
+              {(function(){
+                var rec = (rems||[]).filter(function(r){ return r.leadId===modal.id && r.repeat && r.repeat!=="none"; });
+                if(!rec.length) return null;
+                var r0 = rec[0];
+                return <div style={{fontSize:11,marginTop:6,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",background:C.gL,border:"1px solid "+C.gB,borderRadius:6,padding:"6px 9px"}}>
+                  <span style={{color:C.go,fontWeight:600}}>🔁 Recurring reminder set: {REPLBL[r0.repeat]} · next {fmtDate(r0.date)}</span>
+                  <Btn v="rose" style={{fontSize:10,padding:"3px 8px",marginLeft:"auto"}} onClick={clearRecurring} title="Delete this recurring reminder">🗑 Clear recurring</Btn>
+                </div>;
+              })()}
+              {fuMsg && <div style={{fontSize:11.5,color:C.ac,marginTop:6,fontWeight:600}}>{fuMsg}</div>}
             </div>
             <div style={{marginBottom:8}}>
               <div style={{fontSize:11,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase",color:C.t3,marginBottom:6}}>Action Plan</div>
@@ -1362,6 +1464,8 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
               }
               <Btn v="gold" onClick={function(){ setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,lc:toDay(),log:[...(l.log||[]),toDay()+" — contact logged"]}:l; }); }); setModal(function(m){ return {...m,lc:toDay()}; }); }}>Log contact</Btn>
               <Btn v="sky" onClick={function(){ addToPipeline(); }}>➕ Add to Pipeline</Btn>
+              <Btn v={modal.prospect==="expired"?"gold":"def"} onClick={function(){ setProspect("expired"); }} title="Add to your Expired listings watchlist">🎯 Expired{modal.prospect==="expired"?" ✓":""}</Btn>
+              <Btn v={modal.prospect==="fsbo"?"gold":"def"} onClick={function(){ setProspect("fsbo"); }} title="Add to your FSBO watchlist">🎯 FSBO{modal.prospect==="fsbo"?" ✓":""}</Btn>
               <Btn v="sky" onClick={function(){ syncOneFub(modal); }}>{modal.fubId?"⟳ Update in FUB":"⟳ Push to FUB"}</Btn>
               <Btn v="sky" onClick={function(){ syncOneBrevo(modal); }}>{modal.brevoSynced?"✓ In Brevo":"📨 Add to Brevo"}</Btn>
               {confirmDelete
@@ -3526,8 +3630,9 @@ function PanelMarket({market,setMarket}) {
 }
 
 /* ── GOALS ───────────────────────────────────────────────────── */
-function PanelGoals({goals,act,setGoals,setAct}) {
+function PanelGoals({goals,act,setGoals,setAct,deals}) {
   var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
+  var cancelled = (deals||[]).filter(function(d){ return d.dead; });
   var ITEMS = [["leads","New Leads"],["appts","Appointments"],["listings","New Listings"],["closed","Closed Deals"],["calls","Calls Made"],["offers","Offers Written"]];
   var conv = act.leads>0 ? Math.round(act.appts/act.leads*100) : 0;
   var gci = (act.listings*715000*0.025)+(act.closed*715000*0.025);
@@ -3542,9 +3647,15 @@ function PanelGoals({goals,act,setGoals,setAct}) {
       </div>
       <Card title="Progress">
         {ITEMS.map(function(x){ return <GBar key={x[0]} label={x[1]} actual={act[x[0]]} goal={goals[x[0]]} />; })}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:12}}>
-          {[["Conversion",conv+"%",C.aL,C.ac,C.aB,"leads to appts"],["GCI Pipeline",fmtMoney(Math.round(gci)),C.gL,C.go,C.gB,"est. this week"],["Overall Score",overall+"%",C.s2,C.tx,C.br,"of weekly goals"]].map(function(x){ return <div key={x[0]} style={{background:x[2],border:"1px solid "+x[4],borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em",color:C.t3,marginBottom:3}}>{x[0]}</div><div style={{fontSize:22,fontWeight:700,color:x[3],fontFamily:"monospace"}}>{x[1]}</div><div style={{fontSize:11,color:C.t3,marginTop:3}}>{x[5]}</div></div>; })}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginTop:12}}>
+          {[["Conversion",conv+"%",C.aL,C.ac,C.aB,"leads to appts"],["GCI Pipeline",fmtMoney(Math.round(gci)),C.gL,C.go,C.gB,"est. this week"],["Overall Score",overall+"%",C.s2,C.tx,C.br,"of weekly goals"],["Cancelled",cancelled.length,C.rL,C.ro,C.rB,"deals fell through"]].map(function(x){ return <div key={x[0]} style={{background:x[2],border:"1px solid "+x[4],borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em",color:C.t3,marginBottom:3}}>{x[0]}</div><div style={{fontSize:22,fontWeight:700,color:x[3],fontFamily:"monospace"}}>{x[1]}</div><div style={{fontSize:11,color:C.t3,marginTop:3}}>{x[5]}</div></div>; })}
         </div>
+        {cancelled.length>0 && (
+          <div style={{marginTop:12,borderTop:"1px solid "+C.br,paddingTop:10}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.ro,marginBottom:5}}>✕ Cancelled / Fell Through</div>
+            {cancelled.map(function(d){ return <div key={d.id} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0",borderBottom:"1px solid "+C.br}}><div style={{flex:1}}><div style={{fontSize:12.5,fontWeight:500,color:C.t2}}>{d.addr}</div><div style={{fontSize:11,color:C.t3}}>{d.client} · {d.type}{d.price?" · "+fmtMoney(d.price):""}{d.deadDate?" · "+fmtDate(d.deadDate):""}</div></div></div>; })}
+          </div>
+        )}
         <Btn v="primary" onClick={function(){ setAL(true); callAI("Give brief encouraging coaching to "+AGENT.name+", Sonoma County agent: "+ITEMS.map(function(x){ return x[1]+": "+act[x[0]]+" of "+goals[x[0]]; }).join(", ")+". Specific, motivating, practical. Under 120 words.").then(function(t){ setAT(t); setAL(false); }); }} style={{marginTop:10}}>✨ Get coaching feedback</Btn>
         <AIBox text={aiTxt} loading={aiLd} />
       </Card>
