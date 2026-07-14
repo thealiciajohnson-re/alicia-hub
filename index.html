@@ -121,6 +121,24 @@ function anniversaryYears(closeDate, onDate){
   if(isNaN(c)||isNaN(o)) return 0;
   return Math.max(0, o.getFullYear()-c.getFullYear());
 }
+// Next occurrence of a lead's birthday (accepts "YYYY-MM-DD" or "MM-DD"); returns a date string.
+function nextBirthday(bday){
+  if(!bday) return null;
+  var p=(""+bday).split("-").map(Number), m, dd;
+  if(p.length===3){ m=p[1]; dd=p[2]; } else if(p.length===2){ m=p[0]; dd=p[1]; } else return null;
+  if(!m||!dd) return null;
+  var today=new Date(toDay()+"T12:00:00"), y=today.getFullYear();
+  var a=new Date(y,m-1,dd,12);
+  if(a<today) a=new Date(y+1,m-1,dd,12);
+  return a.toISOString().split("T")[0];
+}
+function bdayDaysUntil(l){ return l && l.bday ? daysUntil(nextBirthday(l.bday)) : null; }
+// Next occurrence of a weekday (0=Sun..6=Sat), returns date string (today if it matches).
+function nextWeekday(dow){
+  var t=new Date(toDay()+"T12:00:00");
+  t.setDate(t.getDate()+(((dow - t.getDay())%7)+7)%7);
+  return t.toISOString().split("T")[0];
+}
 
 // Pull the lead's city from their address ("507 Alta Ave, Rohnert Park, CA 94928" -> "Rohnert Park")
 function cityOf(l){
@@ -659,7 +677,7 @@ function App() {
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
-    {s:"Business",items:[{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"},{id:"score",l:"Scorecard"}]}
+    {s:"Business",items:[{id:"roadmap",l:"📋 Roadmap"},{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"},{id:"score",l:"Scorecard"}]}
   ];
 
   const pp = {leads,rems,deals,act,goals,scores,txs,oh,enrolled,listings,setListings,market,setMarket,social,setSocial,setTab,setLeads,setRems,setDeals,setGoals,setAct,setScores,setTxs,setOh,setEnrolled,addLead,focusLead,setFocusLead,pullFromFub,dismissLead};
@@ -716,6 +734,7 @@ function App() {
           {tab==="addlead"   && <PanelAddLead {...pp} />}
           {tab==="pipeline"  && <PanelPipeline {...pp} />}
           {tab==="watch"     && <PanelWatch {...pp} />}
+          {tab==="roadmap"   && <PanelRoadmap {...pp} />}
           {tab==="actionplans" && <PanelActionPlans {...pp} />}
           {tab==="nurture"   && <PanelNurture {...pp} />}
           {tab==="listings"  && <PanelListings {...pp} />}
@@ -738,6 +757,105 @@ function App() {
           {tab==="score"     && <PanelScore {...pp} />}
         </main>
       </div>
+    </div>
+  );
+}
+
+/* ── ROADMAP (Nucci part-time plan) ──────────────────────────── */
+var ROADMAP_SCHEDULE = [
+  ["Mon","6:30a — Portal video + plan day","Cold call (30 min)","7p coaching call"],
+  ["Tue","6a — Cold call block (45 min)","Follow up with leads","Role play session"],
+  ["Wed","6:30a — Portal video + research farm","Cold call (30 min)","Listing appt / prospecting"],
+  ["Thu","6a — Cold call block (45 min)","Follow up with leads","6p — Nucci training (NON-NEG)"],
+  ["Fri","6:30a — Portal video + plan weekend","Cold call (30 min)","Appointments / showings"],
+  ["Sat","8a–12p — Big block","Open houses / appointments","Off — recharge"],
+  ["Sun","Off (or 1 hr planning)","Off","Plan next week"]
+];
+var ROADMAP_STEPS = [
+  "Read the onboarding email thoroughly (block 60 min Saturday)",
+  "Lock in the mindset — how you do one thing is how you do everything",
+  "Schedule your onboarding call with Cassandra",
+  "Pick coaching calls that fit your job (7a, 10a, 12p, 2p, 7p)",
+  "Commit to 2 role plays per week — minimum",
+  "Never miss the Thursday 6 PM training",
+  "Watch 1 portal video per day (183 videos, 2–3 min each)",
+  "Get a dialer and a website",
+  "Pick 1 farm area to start (200–300 homes you know)",
+  "Use your hours like a professional — protect the blocks"
+];
+var ROADMAP_PRIORITY = [
+  "Thursday 6 PM with Anthony — never miss","Listing appointment training — most ROI/hour","Cold calling training — your daily skill","2 role play sessions/week — minimum","Follow-up training — closes more than you think","Buyer consultation training — at least once","Anything else via recording within 24 hrs"
+];
+function PanelRoadmap({rems,setRems,setTab}) {
+  var [msg,setMsg] = useState("");
+  var DOW = {Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6,Sun:0};
+  function addBlocks(){
+    var blocks = [
+      {title:"📞 Thursday 6 PM Training (Nucci) — NON-NEGOTIABLE", dow:4, time:"18:00"},
+      {title:"🗓️ Saturday Big Block (8a–12p)", dow:6, time:"08:00"},
+      {title:"🎭 Role play session", dow:2, time:"19:00"},
+      {title:"📞 Morning cold-call block", dow:1, time:"06:30"},
+      {title:"🗒️ Plan next week", dow:0, time:"17:00"}
+    ];
+    var toAdd = blocks.filter(function(b){ return !(rems||[]).some(function(r){ return r.title===b.title; }); });
+    if(!toAdd.length){ setMsg("Your roadmap blocks are already in Reminders. ✓"); return; }
+    setRems(function(p){ return [...p, ...toAdd.map(function(b){ return {id:uid(),title:b.title,note:"From your Nucci roadmap — protect this block.",date:nextWeekday(b.dow),time:b.time,type:(b.title.indexOf("cold-call")>-1?"urgent":"appt"),repeat:"weekly",done:false,leadId:""}; })]; });
+    setMsg("✓ Added "+toAdd.length+" weekly roadmap block"+(toAdd.length>1?"s":"")+" to your Reminders (they recur forever).");
+  }
+  var box={background:C.gL,border:"1px solid "+C.gB,borderRadius:8,padding:"10px 12px",marginBottom:10,fontSize:12.5,lineHeight:1.6,color:C.tx};
+  return (
+    <div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:2}}>📋 The Nucci Roadmap <span style={{fontSize:12,fontWeight:400,color:C.t3}}>· Part-Time Edition</span></div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:12,lineHeight:1.5,maxWidth:720}}>Your guide to going full-time. ~19 focused hours/week. It's not quantity of hours — it's <i>quality</i>. Protect the blocks; automate everything else so your human hours go to <b>cold calling & appointments</b>.</div>
+
+      <div style={{...box,background:C.aL,border:"1px solid "+C.aB}}>
+        <b>🎯 The 3 Sacred (non-negotiable) blocks:</b>
+        <div>1️⃣ Mornings before work — your prospecting / cold-call block</div>
+        <div>2️⃣ Thursday 6 PM — Nucci live training</div>
+        <div>3️⃣ Saturday morning — your big build block</div>
+        <div style={{marginTop:6}}><Btn v="primary" style={{fontSize:11}} onClick={addBlocks}>📅 Add roadmap blocks to my Reminders (recurring)</Btn> {msg && <span style={{fontSize:11.5,color:C.ac,marginLeft:8,fontWeight:600}}>{msg}</span>}</div>
+      </div>
+
+      <Card title="Your Weekly Schedule">
+        <div style={{overflowX:"auto"}}>
+          <div style={{display:"flex",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",color:C.t3,borderBottom:"2px solid "+C.br,paddingBottom:5}}>
+            <div style={{width:42}}>Day</div><div style={{flex:1.4}}>Before work</div><div style={{flex:1.2}}>Lunch (30m)</div><div style={{flex:1.2}}>Evening</div>
+          </div>
+          {ROADMAP_SCHEDULE.map(function(r){
+            return <div key={r[0]} style={{display:"flex",fontSize:12,padding:"7px 0",borderBottom:"1px solid "+C.br,alignItems:"center"}}>
+              <div style={{width:42,fontWeight:700,color:C.ac}}>{r[0]}</div><div style={{flex:1.4}}>{r[1]}</div><div style={{flex:1.2}}>{r[2]}</div><div style={{flex:1.2}}>{r[3]}</div>
+            </div>;
+          })}
+        </div>
+      </Card>
+
+      <Card title="The 10 Steps">
+        {ROADMAP_STEPS.map(function(s,i){ return <div key={i} style={{display:"flex",gap:9,padding:"4px 0",fontSize:12.5}}><span style={{color:C.ac,fontWeight:700,minWidth:18}}>{i+1}.</span><span>{s}</span></div>; })}
+      </Card>
+
+      <Card title="Priority Order (if you can only make some calls)">
+        {ROADMAP_PRIORITY.map(function(s,i){ return <div key={i} style={{display:"flex",gap:9,padding:"3px 0",fontSize:12.5}}><span style={{color:C.go}}>▸</span><span>{s}</span></div>; })}
+      </Card>
+
+      <Card title="Timeline — earn the right to ramp up">
+        <div style={{fontSize:12.5,lineHeight:1.8}}>
+          <div><b>Month 3:</b> running listing appointments, writing first contracts</div>
+          <div><b>Month 6:</b> closed at least 1 deal (ideally 2–3)</div>
+          <div><b>Month 9–12:</b> replaced 50%+ of day-job income</div>
+          <div><b>Then:</b> start the conversation about going full-time</div>
+          <div style={{marginTop:6,color:C.ro,fontSize:11.5}}>⚠️ Don't quit too early — build a 6-month pipeline before you walk away from your salary.</div>
+        </div>
+      </Card>
+
+      <Card title="🤖 What your Hub already automates (so you can focus on calls)">
+        <div style={{fontSize:12.5,lineHeight:1.9}}>
+          📲 Daily Instagram posts · 📧 Weekly email campaigns · 🎂 Birthday alerts · 🔍 Buyer search links · 📊 Live market data · 🔔 Follow-up & nurture reminders · ✉️ AI email/text drafts
+          <div style={{marginTop:6,color:C.go,fontWeight:600}}>All the marketing runs itself → your protected hours go to cold calling & appointments.</div>
+        </div>
+      </Card>
+
+      <div style={{textAlign:"center",fontSize:14,fontWeight:700,color:C.ac,margin:"14px 0 4px"}}>DISCIPLINE. CONSISTENCY. PROTECTION.</div>
+      <div style={{textAlign:"center",fontSize:11.5,color:C.t3,marginBottom:10}}>Protect your hours. Work the plan.</div>
     </div>
   );
 }
@@ -774,7 +892,7 @@ function PanelWatch({leads,setFocusLead,setTab}) {
 }
 
 /* ── DASHBOARD ───────────────────────────────────────────────── */
-function PanelDash({leads,rems,deals,act,goals,setTab}) {
+function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead}) {
   var td = toDay();
   var todayR = rems.filter(function(r){ return r.date===td && !r.done; });
   var hot = leads.filter(function(l){ return l.temp==="hot"; }).slice(0,5);
@@ -782,6 +900,7 @@ function PanelDash({leads,rems,deals,act,goals,setTab}) {
   var wkAgo = (function(){ var d=new Date(); d.setDate(d.getDate()-7); return d.toISOString().split("T")[0]; })();
   var liveDeals = (deals||[]).filter(function(d){ return !d.dead; });
   var cancelledDeals = (deals||[]).filter(function(d){ return d.dead; });
+  var bdays = (leads||[]).filter(function(l){ return l.bday; }).map(function(l){ return {l:l, du:bdayDaysUntil(l)}; }).filter(function(x){ return x.du!==null && x.du>=0 && x.du<=14; }).sort(function(a,b){ return a.du-b.du; });
   var live = {
     leads:   (leads||[]).filter(function(l){ return (l.added||"") >= wkAgo; }).length,
     appts:   liveDeals.filter(function(d){ return d.stage===1; }).length,
@@ -816,6 +935,18 @@ function PanelDash({leads,rems,deals,act,goals,setTab}) {
           )}
         </div>
         <div>
+          {bdays.length>0 && (
+            <Card title={"🎂 Birthdays (" + bdays.length + ")"}>
+              {bdays.map(function(x){
+                var l=x.l, du=x.du;
+                return <div key={l.id} onClick={function(){ if(setFocusLead) setFocusLead(l.id); setTab("leads"); }} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid "+C.br,cursor:"pointer"}}>
+                  <div style={{width:28,height:28,borderRadius:"50%",background:du===0?C.rL:C.gL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>🎂</div>
+                  <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:du===0?C.ro:C.tx}}>{l.first} {l.last}</div><div style={{fontSize:11,color:C.t3}}>{du===0?"🎉 Today!":du===1?"Tomorrow":(fmtDate(nextBirthday(l.bday))+" · in "+du+" days")}</div></div>
+                  <span style={{fontSize:11,color:C.ac}}>Open →</span>
+                </div>;
+              })}
+            </Card>
+          )}
           <Card title="Today's Reminders">
             {todayR.length===0 ? <div style={{color:C.t3,fontSize:13}}>No reminders today 🎉</div> : todayR.map(function(r){
               return <div key={r.id} style={{display:"flex",gap:8,padding:"5px 0",borderBottom:"1px solid "+C.br}}><div style={{width:7,height:7,borderRadius:"50%",background:r.type==="urgent"?C.ro:r.type==="appt"?C.ac:C.go,marginTop:5,flexShrink:0}} /><div><div style={{fontSize:13,fontWeight:500}}>{r.title}</div><div style={{fontSize:11,color:C.t3}}>{r.time||"All day"} · {r.type}</div></div></div>;
@@ -1238,6 +1369,15 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     });
   }
 
+  function draftBirthday(l){
+    var isText = !l.email;
+    setAL(true); setAT("");
+    callAI("Write a short, warm, genuine happy-birthday "+(isText?"text message":"email")+" from "+AGENT.name+" ("+AGENT.co+") to "+l.first+". Purely personal and celebratory — NOT salesy, no real-estate pitch, no call to action. Just make them smile on their day. "+(isText?"Very brief and casual, 1–2 sentences.":"Under 55 words. Sign off warmly with just "+AGENT.name+".")).then(function(t){
+      var bad = !t || t.indexOf("⚠️")===0;
+      setAT(bad ? ("Happy Birthday, "+l.first+"! 🎉 Hope your day is full of everything you love. Thinking of you today — "+AGENT.name) : t);
+      setAL(false);
+    });
+  }
   /* ── Send helpers ──────────────────────────────────────────── */
   function curDraft(l){ return aiTxt || draftMsgLocal(l); }
   function emailSubject(l){ return (l.type==="seller" ? "Following up on your home" : "Your Sonoma County home search")+" — "+AGENT.co; }
@@ -1341,7 +1481,9 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                 <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Email" value={emailDraft} onChange={function(e){setEmailDraft(e.target.value);}} onBlur={function(){saveContact("email",emailDraft);}} />
                 <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Email 2 (optional)" value={email2Draft} onChange={function(e){setEmail2Draft(e.target.value);}} onBlur={function(){saveContact("email2",email2Draft);}} />
                 <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Address" value={addrDraft} onChange={function(e){setAddrDraft(e.target.value);}} onBlur={function(){saveContact("addr",addrDraft);}} />
-                <input style={{...inp,fontSize:12,fontFamily:"monospace"}} placeholder="ZIP code (for local market numbers)" value={zipDraft} onChange={function(e){setZipDraft(e.target.value);}} onBlur={function(){saveContact("zip",zipDraft.trim());}} />
+                <input style={{...inp,marginBottom:4,fontSize:12,fontFamily:"monospace"}} placeholder="ZIP code (for local market numbers)" value={zipDraft} onChange={function(e){setZipDraft(e.target.value);}} onBlur={function(){saveContact("zip",zipDraft.trim());}} />
+                <div style={{fontSize:11,color:C.t3,marginBottom:2}}>🎂 Birthday</div>
+                <input style={{...inp,fontSize:12}} type="date" value={modal.bday||""} onChange={function(e){ saveContact("bday",e.target.value); }} />
               </div>
               <div>
                 <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}><Tag t={modal.type}>{modal.type}</Tag><Tag t={modal.temp}>{TICON[modal.temp]} {modal.temp}</Tag></div>
@@ -1385,6 +1527,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
               <div style={{fontSize:11,color:C.t3,marginBottom:4}}>🎉 Home closing date <span style={{color:C.t3}}>— for yearly "happy anniversary" emails</span>:</div>
               <input style={{...inp,fontSize:12}} type="date" value={modal.closeDate||""} onChange={function(e){ saveContact("closeDate", e.target.value); }} />
               {modal.closeDate && <div style={{fontSize:11,color:C.ac,marginTop:4}}>🎂 Next anniversary: {fmtDate(nextAnniversary(modal.closeDate))} · {anniversaryYears(modal.closeDate)}-year{modal.lastAnnivSent?" · last emailed "+modal.lastAnnivSent:""}</div>}
+              {modal.bday && (function(){ var du=bdayDaysUntil(modal); return <div style={{fontSize:11,color:du===0?C.ro:C.ac,marginTop:4,fontWeight:du===0?700:400}}>🎂 Birthday: {fmtDate(nextBirthday(modal.bday))} {du===0?"— TODAY! 🎉":(du!==null?"(in "+du+" day"+(du===1?"":"s")+")":"")} <Btn style={{fontSize:10,padding:"2px 7px",marginLeft:4}} onClick={function(){ draftBirthday(modal); }}>✨ Birthday message</Btn></div>; })()}
             </div>
             <div style={{marginBottom:8}}>
               <div style={{fontSize:11,color:C.t3,marginBottom:4}}>🔄 Auto-Nurture <span style={{color:C.t3}}>— auto-send market updates on a schedule</span>:</div>
@@ -1496,7 +1639,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
 
 /* ── ADD LEAD ────────────────────────────────────────────────── */
 function PanelAddLead({addLead,setTab}) {
-  var blank = {first:"",last:"",phone:"",phone2:"",email:"",email2:"",addr:"",zip:"",type:"buyer",temp:"warm",source:"Zillow",nurture:"active",timeline:"0–3 months",fdays:3,notes:"",autoNurture:"off",lastNurtured:null};
+  var blank = {first:"",last:"",phone:"",phone2:"",email:"",email2:"",addr:"",zip:"",type:"buyer",temp:"warm",source:"Zillow",nurture:"active",timeline:"0–3 months",fdays:3,notes:"",autoNurture:"off",lastNurtured:null,bday:""};
   var [form,setForm] = useState(blank); var [st,setSt] = useState(""); var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
   function fld(k){ return function(e){ setForm(function(p){ return {...p,[k]:e.target.value}; }); }; }
   function save(withAI) {
@@ -1523,9 +1666,10 @@ function PanelAddLead({addLead,setTab}) {
           <Fld label="Email"><input style={inp} type="email" placeholder="jane@email.com" value={form.email} onChange={fld("email")} /></Fld>
           <Fld label="Email 2"><input style={inp} type="email" placeholder="(optional)" value={form.email2} onChange={fld("email2")} /></Fld>
         </Row>
-        <Row cols="2fr 1fr">
+        <Row cols="2fr 1fr 1fr">
           <Fld label="Address"><input style={inp} placeholder="123 Main St, Santa Rosa" value={form.addr} onChange={fld("addr")} /></Fld>
           <Fld label="ZIP code"><input style={inp} placeholder="95403" value={form.zip} onChange={fld("zip")} /></Fld>
+          <Fld label="🎂 Birthday"><input style={inp} type="date" value={form.bday} onChange={fld("bday")} title="Their birthday — surfaces on your Dashboard & prompts a birthday message" /></Fld>
         </Row>
       </Card>
       <Card title="Classification">
@@ -2727,6 +2871,37 @@ function PanelRS({leads,setLeads}) {
   var [view,setView] = useState("pending");
   var [crit,setCrit] = useState({});
   var [showSteps,setShowSteps] = useState(true);
+  var [sg,setSg] = useState({city:"Santa Rosa", minP:"", maxP:"", beds:"", baths:"", type:"any"});
+  var [links,setLinks] = useState(null);
+  var [sgMsg,setSgMsg] = useState("");
+  function sgf(k){ return function(e){ var v=e.target.value; setSg(function(p){ return {...p,[k]:v}; }); setLinks(null); }; }
+  function digitsOf(s){ return s?String(s).replace(/[^0-9]/g,""):""; }
+  function realtorUrl(g){
+    var city=(g.city||"").trim().replace(/\s+/g,"-");
+    var u="https://www.realtor.com/realestateandhomes-search/"+city+"_CA";
+    if(g.type&&g.type!=="any") u+="/type-"+g.type;
+    if(g.beds) u+="/beds-"+g.beds;
+    if(g.baths) u+="/baths-"+g.baths;
+    var mn=digitsOf(g.minP), mx=digitsOf(g.maxP);
+    if(mn||mx) u+="/price-"+(mn||"na")+"-"+(mx||"na");
+    return u+"/sby-6";  // sort by newest
+  }
+  function zillowUrl(g){
+    var fs={sortSelection:{value:"days"}};
+    var mn=digitsOf(g.minP), mx=digitsOf(g.maxP);
+    if(mn||mx){ fs.price={}; if(mn) fs.price.min=Number(mn); if(mx) fs.price.max=Number(mx); }
+    if(g.beds) fs.beds={min:Number(g.beds)};
+    if(g.baths) fs.baths={min:Number(g.baths)};
+    if(g.type==="single-family-home"){ fs.isSingleFamily={value:true}; fs.isTownhouse={value:false}; fs.isMultiFamily={value:false}; fs.isCondo={value:false}; fs.isManufactured={value:false}; fs.isLotLand={value:false}; fs.isApartment={value:false}; }
+    var sqs={usersSearchTerm:(g.city||"")+", CA", filterState:fs, isListVisible:true, isMapVisible:false};
+    return "https://www.zillow.com/homes/for_sale/?searchQueryState="+encodeURIComponent(JSON.stringify(sqs));
+  }
+  function genLinks(){ setLinks({r:realtorUrl(sg), z:zillowUrl(sg)}); setSgMsg(""); }
+  function copyForBuyer(){
+    if(!links) return;
+    var txt="Here are live home searches matching what you're looking for in "+sg.city+", CA — tap “Save Search” on each to get new listings automatically as they hit the market:\n\n🏠 Realtor.com: "+links.r+"\n🏠 Zillow: "+links.z+"\n\nLet me know which ones you'd like to tour!\n— "+AGENT.name+", "+AGENT.co+" | "+AGENT.phone;
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function(){ setSgMsg("✓ Copied a ready-to-send message for your buyer."); });
+  }
   var buyers = leads.filter(function(l){ return l.type==="buyer"||l.type==="both"; });
   var activeA = buyers.filter(function(l){ return l.mlsAlert; });
   var pending = buyers.filter(function(l){ return !l.mlsAlert; });
@@ -2752,6 +2927,39 @@ function PanelRS({leads,setLeads}) {
           </ol>
           <div style={{fontSize:11,color:C.t3,marginTop:8}}>Tip: BAREIS sends one notification per saved search, and you can pause a contact (set Inactive) instead of deleting. Want me to walk you through it live on your screen? Just ask.</div>
         </div>}
+      </Card>
+
+      <Card title="🔍 Buyer Search Links — Realtor.com &amp; Zillow">
+        <div style={{fontSize:11.5,color:C.t3,marginBottom:10,lineHeight:1.5}}>Enter a buyer's criteria → generate pre-filtered <b>Realtor.com</b> &amp; <b>Zillow</b> searches to text or email them. They tap <b>“Save Search”</b> on the site and get automatic new-listing alerts — free &amp; compliant (no scraping).</div>
+        <Row cols="1fr 1fr 1fr">
+          <Fld label="City"><select style={inp} value={sg.city} onChange={sgf("city")}>{MARKET_CITIES.map(function(c){ return <option key={c.zip} value={c.name}>{c.name}</option>; })}</select></Fld>
+          <Fld label="Min price ($)"><input style={inp} type="number" placeholder="500000" value={sg.minP} onChange={sgf("minP")} /></Fld>
+          <Fld label="Max price ($)"><input style={inp} type="number" placeholder="750000" value={sg.maxP} onChange={sgf("maxP")} /></Fld>
+        </Row>
+        <Row cols="1fr 1fr 1fr">
+          <Fld label="Beds (min)"><input style={inp} type="number" placeholder="3" value={sg.beds} onChange={sgf("beds")} /></Fld>
+          <Fld label="Baths (min)"><input style={inp} type="number" placeholder="2" value={sg.baths} onChange={sgf("baths")} /></Fld>
+          <Fld label="Home type"><select style={inp} value={sg.type} onChange={sgf("type")}><option value="any">Any</option><option value="single-family-home">Single-family</option><option value="condo">Condo</option><option value="townhome">Townhome</option><option value="multi-family-home">Multi-family</option></select></Fld>
+        </Row>
+        <Btn v="primary" onClick={genLinks}>🔍 Generate search links</Btn>
+        {links && (
+          <div style={{marginTop:10,background:C.s2,border:"1px solid "+C.br,borderRadius:8,padding:"10px 12px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+              <span style={{fontSize:12,fontWeight:700,minWidth:80}}>🏠 Realtor.com</span>
+              <a href={links.r} target="_blank" rel="noopener" style={{fontSize:12,color:C.ac,wordBreak:"break-all",flex:1}}>Open ↗</a>
+              <Btn style={{fontSize:10,padding:"3px 8px"}} onClick={function(){ if(navigator.clipboard) navigator.clipboard.writeText(links.r).then(function(){ setSgMsg("✓ Realtor.com link copied."); }); }}>Copy</Btn>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <span style={{fontSize:12,fontWeight:700,minWidth:80}}>🏠 Zillow</span>
+              <a href={links.z} target="_blank" rel="noopener" style={{fontSize:12,color:C.ac,wordBreak:"break-all",flex:1}}>Open ↗</a>
+              <Btn style={{fontSize:10,padding:"3px 8px"}} onClick={function(){ if(navigator.clipboard) navigator.clipboard.writeText(links.z).then(function(){ setSgMsg("✓ Zillow link copied."); }); }}>Copy</Btn>
+            </div>
+            <div style={{marginTop:9,borderTop:"1px solid "+C.br,paddingTop:9}}>
+              <Btn v="gold" style={{fontSize:11}} onClick={copyForBuyer}>📋 Copy ready-to-send message for buyer</Btn>
+            </div>
+          </div>
+        )}
+        {sgMsg && <div style={{fontSize:11.5,color:C.ac,marginTop:7,fontWeight:600}}>{sgMsg}</div>}
       </Card>
 
       <Card>
