@@ -2446,15 +2446,17 @@ const SOCIAL_STATUS = {
 };
 // ManyChat comment-to-DM keyword automations. The composer appends a "Comment WORD" CTA
 // that matches these triggers; build the matching auto-reply flow in ManyChat.
+// 6 comment→DM keywords, one per content intent. Build a matching auto-reply flow in ManyChat for each.
 const MANYCHAT_KEYWORDS = [
-  {k:"HOME",   use:"Listing details",  reply:"DM the full listing (price, photos, address) + link; ask for their email."},
-  {k:"TOUR",   use:"Book a showing",   reply:"DM asks their preferred day/time and captures name + phone."},
-  {k:"VALUE",  use:"Seller / home value", reply:"DM offers a free home-value estimate; asks for their address + email."},
-  {k:"GUIDE",  use:"Buyer/Seller guide", reply:"DM sends your Buyer's or Seller's Guide PDF + captures email."},
-  {k:"MARKET", use:"Market report",     reply:"DM sends the latest Sonoma County market update; adds them to your list."}
+  {k:"TOUR",  use:"🏠 Property tour → book a showing", reply:"Auto-DM: 'So glad you love it! Want to see it in person — what day/time works?' Captures name + phone, offers to book the showing. → Use on: 🏠 Property tour, 🎬 B-roll of a home."},
+  {k:"HOME",  use:"🆕 Listing details",                reply:"Auto-DM the full listing (price, photos, address, link) + ask for their email to send more like it. → Use on: 🖼️ Thu listing carousel, just-listed posts."},
+  {k:"VALUE", use:"💲 Free home value",                reply:"Auto-DM a free, no-obligation home value estimate; asks for their address + email. → Use on: seller tips, market takes."},
+  {k:"BUYER", use:"🔑 Start a home search",            reply:"Auto-DM a quick buyer questionnaire (budget, area, timeline) + a saved-search link; captures email. → Use on: 📆 day in the life, buyer tutorials."},
+  {k:"GUIDE", use:"📘 Free buyer/seller guide",        reply:"Auto-DM your Buyer's or Seller's Guide PDF and capture their email. → Use on: 🎓 mini tutorials, 😂 humor."},
+  {k:"LOCAL", use:"🌅 Neighborhood guide",             reply:"Auto-DM a local area guide (schools, vibe, prices) for the city featured; captures email. → Use on: 💛 personal/lifestyle, local content."}
 ];
-// Which keyword best fits each post topic (used as the composer's suggested default).
-const TOPIC_KEYWORD = { broll:"HOME", humor:"GUIDE", personal:"GUIDE", dayinlife:"GUIDE", tutorial:"GUIDE", tour:"HOME" };
+// Default keyword per content pillar (composer suggestion; she can override per post).
+const TOPIC_KEYWORD = { broll:"HOME", humor:"GUIDE", personal:"LOCAL", dayinlife:"BUYER", tutorial:"GUIDE", tour:"TOUR" };
 
 function PanelSocial({social,setSocial,market}) {
   var [platform,setPlatform] = useState("instagram");
