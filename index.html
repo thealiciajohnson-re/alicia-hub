@@ -2429,13 +2429,15 @@ const SOCIAL_PLATFORMS = [
   {id:"gbp",       l:"Google Biz", ic:"🔎", col:"#34a853"}
 ];
 const BUFFER_URL = "https://publish.buffer.com/";
+// Alicia's 6 content pillars (video-first). Each generates a ready-to-film brief:
+// a specific shot idea + an on-screen HOOK + a caption. These only.
 const SOCIAL_TOPICS = [
-  {k:"market",    l:"📊 Market stat",   p:"a Sonoma County market-update post built around one striking stat from my current market data (median price, days on market, or active listings) and what it means for buyers/sellers"},
-  {k:"listing",   l:"🏡 New listing",   p:"a 'Just Listed' teaser post for a Santa Rosa / Sonoma County home — build excitement, invite DMs for a private showing"},
-  {k:"lifestyle", l:"🌅 Local lifestyle",p:"a warm local-lifestyle post about living in Sonoma County this season (farmers markets, Russian River, wineries) that builds local authority and invites replies"},
-  {k:"tip",       l:"💡 Buyer/seller tip",p:"a quick, genuinely useful home buyer or seller tip for the Sonoma County market"},
-  {k:"testimonial",l:"⭐ Client story", p:"a soft social-proof post celebrating a recent happy client (keep it generic/anonymized) with a gentle CTA"},
-  {k:"soldjust",  l:"🎉 Just sold",     p:"a 'Just Sold' celebration post with a subtle 'thinking of selling?' call to action"}
+  {k:"broll",     l:"🎬 B-Roll (7s + hook)", p:"a 7-SECOND B-roll Reel concept for a Sonoma County realtor. Give: (1) SHOT IDEA — exactly what cinematic clip to film (e.g. keys on counter, front door opening, sunlight through a window), (2) an on-screen HOOK — a short punchy line of text overlaid on the video, (3) a short CAPTION. Label each part clearly."},
+  {k:"humor",     l:"😂 Real estate humor",  p:"a funny, relatable real-estate-HUMOR Reel concept — a relatable agent/buyer/seller moment. Give: SHOT IDEA (what to act out or show), on-screen HOOK, and a witty CAPTION. Label each part."},
+  {k:"personal",  l:"💛 Personal & lifestyle",p:"a warm PERSONAL / lifestyle Reel concept showing the human behind the business (Sonoma County life, coffee, family, behind-the-scenes). Give: SHOT IDEA, on-screen HOOK, and a connective CAPTION. Label each part."},
+  {k:"dayinlife", l:"📆 Day in the life",     p:"a 'DAY IN THE LIFE of a Sonoma County realtor' Reel concept — list 4-6 quick clips to film through the day. Give: the SHOT LIST, an on-screen HOOK for the opener, and a CAPTION. Label each part."},
+  {k:"tutorial",  l:"🎓 Mini tutorial",       p:"a quick EDUCATIONAL mini-tutorial Reel concept for buyers or sellers (one specific tip explained in under 30 seconds). Give: SHOT IDEA / how to film it, an on-screen HOOK, and a CAPTION. Label each part."},
+  {k:"tour",      l:"🏠 Property tour",        p:"a PROPERTY-TOUR Reel concept in the proven viral format. Structure: (1) ALWAYS open with this exact HOOK in the first 2 seconds — agent ON CAMERA in front of the home with a big animated PRICE pop-up saying 'This is what $[price] gets you in [city], California' (fill in the real price + city); (2) fast room-by-room walkthrough with BIG on-screen TEXT labels on each clip — price, room names (KITCHEN, PRIMARY, etc.), square footage, and standout-feature words; (3) end on a punchy CTA word + a spoken CTA. Give: the shot-by-shot SEQUENCE with the exact on-screen TEXT for each clip, the opening HOOK line (always the 'This is what $__ gets you in __, California' format), and a CAPTION that starts with the price reveal + soft CTA + 4-6 local hashtags. Vertical 9:16, ~30-45 sec, subtitles on, trending audio in-app."}
 ];
 const SOCIAL_STATUS = {
   idea:      {l:"Idea",      bg:C.s2,  tx:C.t2, bd:C.brm},
@@ -2452,7 +2454,7 @@ const MANYCHAT_KEYWORDS = [
   {k:"MARKET", use:"Market report",     reply:"DM sends the latest Sonoma County market update; adds them to your list."}
 ];
 // Which keyword best fits each post topic (used as the composer's suggested default).
-const TOPIC_KEYWORD = { market:"MARKET", listing:"HOME", lifestyle:"GUIDE", tip:"GUIDE", testimonial:"GUIDE", soldjust:"VALUE" };
+const TOPIC_KEYWORD = { broll:"HOME", humor:"GUIDE", personal:"GUIDE", dayinlife:"GUIDE", tutorial:"GUIDE", tour:"HOME" };
 
 function PanelSocial({social,setSocial,market}) {
   var [platform,setPlatform] = useState("instagram");
