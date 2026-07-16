@@ -75,6 +75,7 @@ const AGENT = {
   email: "alicia@excelleraterealestate.com",
   web1: "https://thealiciajohnsonhomes.com/",
   web2: "https://excelleraterealestate.com/",
+  booking: "https://calendar.app.google/c7Q5rPJ1HtXafK4B6",   // Google Appointment Schedule — clients self-book
   photo: "https://photos.zillowstatic.com/fp/1896d8d0e6244cbbde5af305ddebfba2-h_l.jpg"   // Zillow-hosted headshot for email header (blank = "AJ" monogram)
 };
 // Authenticated (SPF/DKIM) sending domain for Brevo — best inbox placement.
@@ -444,7 +445,8 @@ function brandedEmailHtml(body, headline, opts){
     +   esc(AGENT.title)+" &middot; Lic. # "+esc(AGENT.lic)+"<br>"
     +   esc(AGENT.co)+"<br>"
     +   "<a href=\"tel:"+esc(digits(AGENT.phone))+"\" style=\"color:#666666;text-decoration:none\">"+esc(AGENT.phone)+"</a> &middot; <a href=\"mailto:"+esc(AGENT.email)+"\" style=\"color:#1b4f3a\">"+esc(AGENT.email)+"</a><br>"
-    +   "<a href=\""+esc(AGENT.web1)+"\" style=\"color:#1b4f3a\">"+esc(webHost(AGENT.web1))+"</a> &middot; <a href=\""+esc(AGENT.web2)+"\" style=\"color:#1b4f3a\">"+esc(webHost(AGENT.web2))+"</a>"
+    +   "<a href=\""+esc(AGENT.web1)+"\" style=\"color:#1b4f3a\">"+esc(webHost(AGENT.web1))+"</a> &middot; <a href=\""+esc(AGENT.web2)+"\" style=\"color:#1b4f3a\">"+esc(webHost(AGENT.web2))+"</a><br>"
+    +   "<a href=\""+esc(AGENT.booking)+"\" style=\"color:#1b4f3a;font-weight:bold\">📅 Book a call with me</a>"
     + "</div>");
   return ""
     + "<div style=\"background:#f5f4f0;padding:24px 0;font-family:Arial,Helvetica,sans-serif\">"
@@ -1650,7 +1652,7 @@ function PanelAddLead({addLead,setTab}) {
     setSt("Saved. Follow-up: "+fmtDate(lead.fu));
     // ⚡ Speed-to-lead: instantly send a warm intro email via Brevo (tracked) the moment the lead is added.
     if (form.sendIntro && lead.email) {
-      var body = "Hi "+lead.first+",\n\nThank you for reaching out — I'm Alicia Johnson with Excellerate Real Estate, and I'd love to help you "+(lead.type==="seller"?"with your home sale":lead.type==="both"?"with your move":"find the right home")+" here in Sonoma County.\n\nI wanted to connect right away so you know you're in good hands — I'll follow up personally very soon. In the meantime, what's the best day and time to reach you?";
+      var body = "Hi "+lead.first+",\n\nThank you for reaching out — I'm Alicia Johnson with Excellerate Real Estate, and I'd love to help you "+(lead.type==="seller"?"with your home sale":lead.type==="both"?"with your move":"find the right home")+" here in Sonoma County.\n\nI wanted to connect right away so you know you're in good hands — I'll follow up personally very soon. In the meantime, what's the best day and time to reach you?\n\n📅 Prefer to grab a time now? Book a quick call with me here: "+AGENT.booking;
       body += "\n\nWarm regards,\n"+AGENT.name+"\n"+AGENT.phone+" | "+AGENT.email+"\nDRE #"+AGENT.lic+"\nthealiciajohnsonhomes.com";
       callBrevo("send",{to:[{email:lead.email,name:(lead.first+" "+lead.last).trim()}], subject:"Great to connect, "+lead.first+"! — Alicia Johnson, Excellerate Real Estate", html:textToHtml(body), senderEmail:AGENT.email, senderName:AGENT.name, replyTo:AGENT.email, tags:["speed-to-lead"]}).then(function(res){
         if(res && res.messageId) setSt("⚡ Saved + instant intro email sent to "+lead.first+"! Follow-up: "+fmtDate(lead.fu));
