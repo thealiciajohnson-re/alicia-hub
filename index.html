@@ -894,7 +894,52 @@ function PanelWatch({leads,setFocusLead,setTab}) {
 }
 
 /* ── DASHBOARD ───────────────────────────────────────────────── */
-function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead}) {
+// Horizontal bar breakdown (leads by source/type/stage, etc.)
+function BarList({title, data, color}) {
+  var max = (data||[]).reduce(function(a,b){ return Math.max(a, b.v); }, 1);
+  return (
+    <Card title={title}>
+      {(!data || data.length===0) ? <div style={{color:C.t3,fontSize:12}}>No data yet.</div> : data.map(function(d){
+        return <div key={d.k} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{width:96,fontSize:11.5,color:C.t2,textAlign:"right",flexShrink:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.k}</div>
+          <div style={{flex:1,background:C.s2,borderRadius:5,height:14,overflow:"hidden"}}><div style={{width:(d.v/max*100)+"%",background:color||C.ac,height:"100%",borderRadius:5,minWidth:d.v>0?6:0,transition:"width .3s"}} /></div>
+          <div style={{width:28,fontSize:12,fontWeight:700,color:C.tx,textAlign:"right"}}>{d.v}</div>
+        </div>;
+      })}
+    </Card>
+  );
+}
+// Area/line trend chart (SVG, no library) — points: [{label, count}]
+function TrendChart({title, points, color, fill}) {
+  var w=560, h=150, pad=26;
+  var pts = points||[];
+  var max = pts.reduce(function(a,b){ return Math.max(a, b.count); }, 1);
+  var n = Math.max(1, pts.length);
+  var xs = function(i){ return pad + (i*(w-2*pad)/Math.max(1,n-1)); };
+  var ys = function(v){ return (h-pad) - (v/max)*(h-2*pad-8); };
+  var line = pts.map(function(p,i){ return (i===0?"M":"L")+xs(i).toFixed(1)+" "+ys(p.count).toFixed(1); }).join(" ");
+  var area = pts.length ? ("M"+xs(0).toFixed(1)+" "+(h-pad)+" "+pts.map(function(p,i){ return "L"+xs(i).toFixed(1)+" "+ys(p.count).toFixed(1); }).join(" ")+" L"+xs(n-1).toFixed(1)+" "+(h-pad)+" Z") : "";
+  return (
+    <Card title={title}>
+      <svg viewBox={"0 0 "+w+" "+h} style={{width:"100%",height:"auto",display:"block"}}>
+        {area && <path d={area} fill={fill||C.aL} />}
+        {line && <path d={line} fill="none" stroke={color||C.ac} strokeWidth="2.5" strokeLinejoin="round" />}
+        {pts.map(function(p,i){ return <g key={i}>
+          <circle cx={xs(i)} cy={ys(p.count)} r="3.5" fill={color||C.ac} />
+          <text x={xs(i)} y={ys(p.count)-9} fontSize="11" fontWeight="700" fill={C.t2} textAnchor="middle">{p.count}</text>
+          <text x={xs(i)} y={h-7} fontSize="10" fill={C.t3} textAnchor="middle">{p.label}</text>
+        </g>; })}
+      </svg>
+    </Card>
+  );
+}
+function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMarket}) {
+  var [socEdit,setSocEdit] = useState(false);
+  var soc = (market && market.social) || {};
+  function setSoc(plat, field, val){
+    if(!setMarket) return;
+    setMarket(function(m){ var s=Object.assign({}, m.social||{}); s[plat]=Object.assign({}, s[plat]||{}); s[plat][field]=val; s.updated=toDay(); return Object.assign({}, m, {social:s}); });
+  }
   var td = toDay();
   var todayR = rems.filter(function(r){ return r.date===td && !r.done; });
   var hot = leads.filter(function(l){ return l.temp==="hot"; }).slice(0,5);
@@ -909,6 +954,22 @@ function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead}) {
     listings:liveDeals.filter(function(d){ return d.type==="Listing" && d.stage>=2 && d.stage<4; }).length,
     closed:  liveDeals.filter(function(d){ return d.stage===4; }).length
   };
+  // ── Analytics from real CRM data ──
+  var trend = (function(){
+    var now = new Date(td+"T12:00:00"); var months=[];
+    for(var i=5;i>=0;i--){ var d=new Date(now.getFullYear(), now.getMonth()-i, 1); months.push({label:d.toLocaleDateString("en-US",{month:"short"}), key:(d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)), count:0}); }
+    (leads||[]).forEach(function(l){ if(l.added){ var k=(""+l.added).slice(0,7); var m=months.find(function(x){ return x.key===k; }); if(m) m.count++; } });
+    return months;
+  })();
+  function tally(arr, fn, order){
+    var m={}; (arr||[]).forEach(function(x){ var k=fn(x); if(k){ m[k]=(m[k]||0)+1; } });
+    var keys = order ? order.filter(function(k){ return m[k]!==undefined; }) : Object.keys(m).sort(function(a,b){ return m[b]-m[a]; });
+    return keys.map(function(k){ return {k:k, v:m[k]}; });
+  }
+  var bySource = tally(leads, function(l){ return l.source; });
+  var byType   = tally(leads, function(l){ return l.type==="buyer"?"Buyer":l.type==="seller"?"Seller":l.type==="both"?"Buyer & Seller":null; });
+  var byTemp   = tally(leads, function(l){ return l.temp==="hot"?"🔥 Hot":l.temp==="warm"?"🌤 Warm":l.temp==="cold"?"❄️ Cold":null; }, ["🔥 Hot","🌤 Warm","❄️ Cold"]);
+  var byStage  = DSTAGES.map(function(s,i){ return {k:s, v:liveDeals.filter(function(d){ return d.stage===i; }).length}; });
   return (
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:14}}>Dashboard</div>
@@ -961,6 +1022,55 @@ function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead}) {
             })}
           </Card>
         </div>
+      </div>
+      <div style={{marginTop:14}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>📈 Analytics <span style={{fontSize:11,fontWeight:400,color:C.t3}}>— from your CRM data</span></div>
+        <TrendChart title="New Leads — last 6 months" points={trend} />
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
+          <BarList title="Leads by Source" data={bySource} color={C.ac} />
+          <BarList title="Pipeline by Stage" data={byStage} color={C.go} />
+          <BarList title="Leads by Type" data={byType} color={C.sk} />
+          <BarList title="Leads by Temperature" data={byTemp} color={C.ro} />
+        </div>
+        {/* Social reach — Instagram / Facebook / TikTok */}
+        {(function(){
+          var plats = [{k:"instagram",l:"📸 Instagram",c:"#c13584"},{k:"facebook",l:"👍 Facebook",c:"#1877f2"},{k:"tiktok",l:"🎵 TikTok",c:"#111111"}];
+          var max = plats.reduce(function(a,p){ return Math.max(a, Number((soc[p.k]||{}).reach)||0); }, 1);
+          return (
+            <div style={{marginTop:10}}>
+              <Card title="📱 Social Reach — last 30 days">
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <span style={{fontSize:11,color:C.t3}}>{soc.updated?("Updated "+fmtDate(soc.updated)):"Enter your numbers from each app's Insights"}</span>
+                  <Btn onClick={function(){ setSocEdit(function(s){ return !s; }); }} style={{fontSize:11}}>{socEdit?"Done":"✎ Edit numbers"}</Btn>
+                </div>
+                {socEdit ? (
+                  <div>
+                    {plats.map(function(p){ var d=soc[p.k]||{}; return (
+                      <div key={p.k} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+                        <div style={{width:110,fontSize:12.5,fontWeight:600}}>{p.l}</div>
+                        <span style={{fontSize:11,color:C.t3}}>Followers</span>
+                        <input type="number" value={d.followers||""} onChange={function(e){ setSoc(p.k,"followers",Number(e.target.value)||0); }} style={{...inp,width:90,fontSize:12}} placeholder="0" />
+                        <span style={{fontSize:11,color:C.t3}}>Reach/views (30d)</span>
+                        <input type="number" value={d.reach||""} onChange={function(e){ setSoc(p.k,"reach",Number(e.target.value)||0); }} style={{...inp,width:100,fontSize:12}} placeholder="0" />
+                      </div>
+                    ); })}
+                    <div style={{fontSize:10.5,color:C.t3,marginTop:4}}>💡 Instagram: Professional Dashboard → Insights. TikTok: Analytics. Facebook: Insights / Meta Business Suite.</div>
+                  </div>
+                ) : (
+                  plats.every(function(p){ return !(soc[p.k]&&(soc[p.k].reach||soc[p.k].followers)); })
+                    ? <div style={{color:C.t3,fontSize:12.5,lineHeight:1.5}}>No numbers yet — tap <b>✎ Edit numbers</b> to add your Instagram, Facebook & TikTok reach.</div>
+                    : plats.map(function(p){ var d=soc[p.k]||{}; return (
+                        <div key={p.k} style={{display:"flex",alignItems:"center",gap:8,marginBottom:9}}>
+                          <div style={{width:110,fontSize:12.5,fontWeight:600}}>{p.l}</div>
+                          <div style={{flex:1,background:C.s2,borderRadius:5,height:16,overflow:"hidden"}}><div style={{width:((Number(d.reach)||0)/max*100)+"%",background:p.c,height:"100%",borderRadius:5,minWidth:(d.reach>0?6:0)}} /></div>
+                          <div style={{width:120,textAlign:"right",fontSize:12}}><b style={{color:C.tx}}>{(Number(d.reach)||0).toLocaleString()}</b> <span style={{color:C.t3}}>reach</span>{d.followers?<div style={{fontSize:10.5,color:C.t3}}>{Number(d.followers).toLocaleString()} followers</div>:null}</div>
+                        </div>
+                      ); })
+                )}
+              </Card>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
