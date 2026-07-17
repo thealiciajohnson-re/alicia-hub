@@ -314,7 +314,8 @@ function Tag({t,children}) {
     buyer:[C.skL,C.sk,C.skB], seller:[C.gL,C.go,C.gB],
     both:["#f3f0ff","#5b3dc0","rgba(91,61,192,0.18)"],
     hot:[C.rL,C.ro,C.rB], warm:["#fff7e6",C.go,C.gB],
-    cold:[C.s2,C.t3,C.brm], new:[C.aL,C.ac,C.aB]
+    cold:[C.s2,C.t3,C.brm], new:[C.aL,C.ac,C.aB],
+    closed:["#e8f5e9","#2e7d32","rgba(46,125,50,0.22)"]
   };
   const v = map[t] || map.new;
   return <span style={{display:"inline-flex",alignItems:"center",fontSize:11,padding:"2px 8px",borderRadius:20,fontWeight:600,background:v[0],color:v[1],border:"1px solid "+v[2]}}>{children}</span>;
@@ -668,7 +669,6 @@ function App() {
 
   const pendRem = rems.filter(function(r){ return !r.done; }).length;
   const watchN = leads.filter(function(l){ return l.prospect; }).length;
-  const closedN = leads.filter(function(l){ return l.closeDate; }).length;
   const dueToday = leads.filter(function(l){ return l.fu && l.fu <= toDay(); }).length;
   const nurtureDueN = leads.filter(nurtureDue).length;
   const socialDueN = social.filter(function(p){ return p.status!=="posted" && p.date && p.date <= toDay(); }).length;
@@ -678,7 +678,7 @@ function App() {
     {s:"Daily",items:[{id:"dashboard",l:"Dashboard"},{id:"calendar",l:"Today"},{id:"rems",l:"Reminders",b:pendRem}]},
     {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired / FSBO",b:watchN}]},
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
-    {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"closed",l:"Closed Clients",b:closedN},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
+    {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
     {s:"Business",items:[{id:"roadmap",l:"📋 Roadmap"},{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"},{id:"score",l:"Scorecard"}]}
   ];
@@ -737,7 +737,6 @@ function App() {
           {tab==="addlead"   && <PanelAddLead {...pp} />}
           {tab==="pipeline"  && <PanelPipeline {...pp} />}
           {tab==="watch"     && <PanelWatch {...pp} />}
-          {tab==="closed"    && <PanelClosed {...pp} />}
           {tab==="roadmap"   && <PanelRoadmap {...pp} />}
           {tab==="actionplans" && <PanelActionPlans {...pp} />}
           {tab==="nurture"   && <PanelNurture {...pp} />}
@@ -865,42 +864,6 @@ function PanelRoadmap({rems,setRems,setTab}) {
 }
 
 /* ── EXPIRED / FSBO WATCHLIST ────────────────────────────────── */
-// Closed / past clients roster — home for anniversaries, reviews & referrals.
-function PanelClosed({leads,setFocusLead,setTab}) {
-  var closed = (leads||[]).filter(function(l){ return l.closeDate; }).sort(function(a,b){
-    var da=daysUntil(nextAnniversary(a.closeDate)), db=daysUntil(nextAnniversary(b.closeDate));
-    return (da===null?9999:da)-(db===null?9999:db);
-  });
-  function open(l){ if(setFocusLead) setFocusLead(l.id); setTab("leads"); }
-  var thisYear = (new Date()).getFullYear();
-  return (
-    <div>
-      <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>🏡 Closed Clients <span style={{fontSize:13,fontWeight:400,color:C.t3}}>{closed.length}</span></div>
-      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:680}}>Your past-client book — everyone you've closed. They get an <b>automatic home-anniversary email</b> each year, and this is where you nurture repeat business, reviews, and referrals. Tap a name to open their card (send a note, ask for a review). Add someone here by setting their <b>🎉 Home closing date</b> on their lead.</div>
-      {closed.length===0 ? (
-        <Card><div style={{color:C.t3,fontSize:13}}>No closed clients yet. Open a lead → set their <b>🎉 Home closing date</b> and they'll appear here.</div></Card>
-      ) : closed.map(function(l){
-        var na=nextAnniversary(l.closeDate), du=daysUntil(na), yrs=anniversaryYears(l.closeDate), sentThis=(String(l.lastAnnivSent||"").indexOf(String(thisYear))>=0);
-        return (
-          <Card key={l.id} style={{marginTop:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-              <div style={{width:34,height:34,borderRadius:"50%",background:C.gL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>🏡</div>
-              <div style={{flex:1,minWidth:170}}>
-                <div style={{fontSize:14,fontWeight:600}}>{l.first} {l.last} <Tag t={l.type||"both"}>{l.type||"client"}</Tag></div>
-                <div style={{fontSize:11.5,color:C.t3}}>{l.addr||"—"} · Closed {fmtDate(l.closeDate)}</div>
-              </div>
-              <div style={{textAlign:"right",fontSize:11.5,color:C.t2,minWidth:130}}>
-                <div>🎂 {yrs}-yr anniversary</div>
-                <div style={{color:du===0?C.ro:C.t3}}>{du===0?"🎉 Today!":du!==null?(fmtDate(na)+" · in "+du+"d"):"—"}{sentThis?" · ✓ emailed":""}</div>
-              </div>
-              <Btn v="sky" style={{fontSize:11}} onClick={function(){ open(l); }}>Open →</Btn>
-            </div>
-          </Card>
-        );
-      })}
-    </div>
-  );
-}
 function PanelWatch({leads,setFocusLead,setTab}) {
   var expired = (leads||[]).filter(function(l){ return l.prospect==="expired"; });
   var fsbo = (leads||[]).filter(function(l){ return l.prospect==="fsbo"; });
@@ -1578,7 +1541,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
       <Card style={{padding:"8px 10px",marginBottom:8}}>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           <input style={{...inp,flex:1,minWidth:160}} placeholder="Search name, phone, email…" value={srch} onChange={function(e){ setSrch(e.target.value); }} />
-          <select style={{...inp,width:115}} value={fT} onChange={function(e){ setFT(e.target.value); }}><option value="">All types</option><option value="buyer">Buyer</option><option value="seller">Seller</option><option value="both">Both</option></select>
+          <select style={{...inp,width:115}} value={fT} onChange={function(e){ setFT(e.target.value); }}><option value="">All types</option><option value="buyer">Buyer</option><option value="seller">Seller</option><option value="both">Both</option><option value="closed">Closed Client</option></select>
           <select style={{...inp,width:110}} value={fTp} onChange={function(e){ setFTp(e.target.value); }}><option value="">All temps</option><option value="hot">Hot</option><option value="warm">Warm</option><option value="cold">Cold</option></select>
           <select style={{...inp,width:125}} value={fS} onChange={function(e){ setFS(e.target.value); }}><option value="">All sources</option>{SRCS.map(function(s){ return <option key={s}>{s}</option>; })}</select>
         </div>
@@ -1636,7 +1599,12 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                 <input style={{...inp,fontSize:12}} type="date" value={modal.bday||""} onChange={function(e){ saveContact("bday",e.target.value); }} />
               </div>
               <div>
-                <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}><Tag t={modal.type}>{modal.type}</Tag><Tag t={modal.temp}>{TICON[modal.temp]} {modal.temp}</Tag></div>
+                <div style={{fontSize:11,color:C.t3,marginBottom:3}}>Type</div>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
+                  {[["buyer","Buyer"],["seller","Seller"],["both","Both"],["closed","Closed Client"]].map(function(o){ return <Btn key={o[0]} v={modal.type===o[0]?"primary":"def"} style={{fontSize:10,padding:"3px 9px"}} onClick={function(){ saveContact("type",o[0]); }}>{o[1]}</Btn>; })}
+                </div>
+                {modal.type==="closed" && !modal.closeDate && <div style={{fontSize:11,color:"#2e7d32",background:"#e8f5e9",border:"1px solid rgba(46,125,50,0.22)",borderRadius:6,padding:"6px 9px",marginBottom:8,lineHeight:1.4}}>🎉 Add their <b>Home closing date</b> below so they get an automatic anniversary email every year.</div>}
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}><Tag t={modal.temp}>{TICON[modal.temp]} {modal.temp}</Tag></div>
                 <div style={{fontSize:11,color:C.t3,marginBottom:3}}>Source</div>
                 <select style={{...inp,fontSize:12,marginBottom:6}} value={modal.source||""} onChange={function(e){ saveContact("source",e.target.value); }}>{SRCS.indexOf(modal.source)<0 && modal.source ? <option value={modal.source}>{modal.source}</option> : null}{SRCS.map(function(s){ return <option key={s} value={s}>{s}</option>; })}</select>
                 <div style={{fontSize:12,color:C.t2}}>Timeline: {modal.timeline}</div>
@@ -1832,7 +1800,7 @@ function PanelAddLead({addLead,setTab}) {
       </Card>
       <Card title="Classification">
         <Row cols="1fr 1fr 1fr 1fr">
-          <Fld label="Type"><select style={inp} value={form.type} onChange={fld("type")}><option value="buyer">Buyer</option><option value="seller">Seller</option><option value="both">Both</option></select></Fld>
+          <Fld label="Type"><select style={inp} value={form.type} onChange={fld("type")}><option value="buyer">Buyer</option><option value="seller">Seller</option><option value="both">Both</option><option value="closed">Closed Client</option></select></Fld>
           <Fld label="Temperature"><select style={inp} value={form.temp} onChange={fld("temp")}><option value="hot">Hot</option><option value="warm">Warm</option><option value="cold">Cold</option></select></Fld>
           <Fld label="Source"><select style={inp} value={form.source} onChange={fld("source")}>{SRCS.map(function(s){ return <option key={s}>{s}</option>; })}</select></Fld>
           <Fld label="Nurture"><select style={inp} value={form.nurture} onChange={fld("nurture")}><option value="active">Active</option><option value="long-term">Long-term</option><option value="drip">Drip</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="none">None</option></select></Fld>
