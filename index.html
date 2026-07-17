@@ -668,6 +668,7 @@ function App() {
 
   const pendRem = rems.filter(function(r){ return !r.done; }).length;
   const watchN = leads.filter(function(l){ return l.prospect; }).length;
+  const closedN = leads.filter(function(l){ return l.closeDate; }).length;
   const dueToday = leads.filter(function(l){ return l.fu && l.fu <= toDay(); }).length;
   const nurtureDueN = leads.filter(nurtureDue).length;
   const socialDueN = social.filter(function(p){ return p.status!=="posted" && p.date && p.date <= toDay(); }).length;
@@ -677,7 +678,7 @@ function App() {
     {s:"Daily",items:[{id:"dashboard",l:"Dashboard"},{id:"calendar",l:"Today"},{id:"rems",l:"Reminders",b:pendRem}]},
     {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired / FSBO",b:watchN}]},
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
-    {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
+    {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"closed",l:"Closed Clients",b:closedN},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
     {s:"Business",items:[{id:"roadmap",l:"📋 Roadmap"},{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"},{id:"score",l:"Scorecard"}]}
   ];
@@ -736,6 +737,7 @@ function App() {
           {tab==="addlead"   && <PanelAddLead {...pp} />}
           {tab==="pipeline"  && <PanelPipeline {...pp} />}
           {tab==="watch"     && <PanelWatch {...pp} />}
+          {tab==="closed"    && <PanelClosed {...pp} />}
           {tab==="roadmap"   && <PanelRoadmap {...pp} />}
           {tab==="actionplans" && <PanelActionPlans {...pp} />}
           {tab==="nurture"   && <PanelNurture {...pp} />}
@@ -863,6 +865,42 @@ function PanelRoadmap({rems,setRems,setTab}) {
 }
 
 /* ── EXPIRED / FSBO WATCHLIST ────────────────────────────────── */
+// Closed / past clients roster — home for anniversaries, reviews & referrals.
+function PanelClosed({leads,setFocusLead,setTab}) {
+  var closed = (leads||[]).filter(function(l){ return l.closeDate; }).sort(function(a,b){
+    var da=daysUntil(nextAnniversary(a.closeDate)), db=daysUntil(nextAnniversary(b.closeDate));
+    return (da===null?9999:da)-(db===null?9999:db);
+  });
+  function open(l){ if(setFocusLead) setFocusLead(l.id); setTab("leads"); }
+  var thisYear = (new Date()).getFullYear();
+  return (
+    <div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>🏡 Closed Clients <span style={{fontSize:13,fontWeight:400,color:C.t3}}>{closed.length}</span></div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:680}}>Your past-client book — everyone you've closed. They get an <b>automatic home-anniversary email</b> each year, and this is where you nurture repeat business, reviews, and referrals. Tap a name to open their card (send a note, ask for a review). Add someone here by setting their <b>🎉 Home closing date</b> on their lead.</div>
+      {closed.length===0 ? (
+        <Card><div style={{color:C.t3,fontSize:13}}>No closed clients yet. Open a lead → set their <b>🎉 Home closing date</b> and they'll appear here.</div></Card>
+      ) : closed.map(function(l){
+        var na=nextAnniversary(l.closeDate), du=daysUntil(na), yrs=anniversaryYears(l.closeDate), sentThis=(String(l.lastAnnivSent||"").indexOf(String(thisYear))>=0);
+        return (
+          <Card key={l.id} style={{marginTop:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              <div style={{width:34,height:34,borderRadius:"50%",background:C.gL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>🏡</div>
+              <div style={{flex:1,minWidth:170}}>
+                <div style={{fontSize:14,fontWeight:600}}>{l.first} {l.last} <Tag t={l.type||"both"}>{l.type||"client"}</Tag></div>
+                <div style={{fontSize:11.5,color:C.t3}}>{l.addr||"—"} · Closed {fmtDate(l.closeDate)}</div>
+              </div>
+              <div style={{textAlign:"right",fontSize:11.5,color:C.t2,minWidth:130}}>
+                <div>🎂 {yrs}-yr anniversary</div>
+                <div style={{color:du===0?C.ro:C.t3}}>{du===0?"🎉 Today!":du!==null?(fmtDate(na)+" · in "+du+"d"):"—"}{sentThis?" · ✓ emailed":""}</div>
+              </div>
+              <Btn v="sky" style={{fontSize:11}} onClick={function(){ open(l); }}>Open →</Btn>
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
 function PanelWatch({leads,setFocusLead,setTab}) {
   var expired = (leads||[]).filter(function(l){ return l.prospect==="expired"; });
   var fsbo = (leads||[]).filter(function(l){ return l.prospect==="fsbo"; });
@@ -3506,6 +3544,7 @@ function txCommission(tx){
 
 function PanelTx({txs,setTxs}) {
   var [show,setShow] = useState(false);
+  var [delTx,setDelTx] = useState(null);
   var [form,setForm] = useState({addr:"",client:"",type:"Listing",price:"",comm:"2.5",split:"80",closeDate:""});
   function fld(k){ return function(e){ setForm(function(p){ return {...p,[k]:e.target.value}; }); }; }
   function save() {
@@ -3572,7 +3611,17 @@ function PanelTx({txs,setTxs}) {
                 <div style={{fontSize:14,fontWeight:600}}>{tx.addr}</div>
                 <div style={{fontSize:12,color:C.t2}}>{tx.client} · {tx.type}{tx.price?" · "+fmtMoney(tx.price):""}</div>
               </div>
-              {tx.closeDate && <div style={{fontSize:11,color:C.t3,background:C.s2,borderRadius:5,padding:"3px 8px",whiteSpace:"nowrap"}}>Closes {fmtDate(tx.closeDate)}</div>}
+              <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                {tx.closeDate && <div style={{fontSize:11,color:C.t3,background:C.s2,borderRadius:5,padding:"3px 8px",whiteSpace:"nowrap"}}>Closes {fmtDate(tx.closeDate)}</div>}
+                {delTx===tx.id
+                  ? <span style={{display:"inline-flex",alignItems:"center",gap:5}}>
+                      <span style={{fontSize:11,color:C.ro}}>Delete?</span>
+                      <Btn v="rose" style={{fontSize:10,padding:"3px 8px"}} onClick={function(){ setTxs(function(p){ return p.filter(function(t){ return t.id!==tx.id; }); }); setDelTx(null); }}>Yes</Btn>
+                      <Btn style={{fontSize:10,padding:"3px 8px"}} onClick={function(){ setDelTx(null); }}>No</Btn>
+                    </span>
+                  : <Btn v="rose" style={{fontSize:10,padding:"3px 8px"}} onClick={function(){ setDelTx(tx.id); }} title="Delete this transaction (e.g. if the deal cancelled)">🗑</Btn>
+                }
+              </div>
             </div>
 
             {/* Editable sale price — always available, even on a $0 deal */}
