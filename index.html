@@ -676,7 +676,7 @@ function App() {
 
   const NAV = [
     {s:"Daily",items:[{id:"dashboard",l:"Dashboard"},{id:"calendar",l:"Today"},{id:"rems",l:"Reminders",b:pendRem}]},
-    {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired / FSBO",b:watchN}]},
+    {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired/FSBO/Lost",b:watchN}]},
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
@@ -867,6 +867,7 @@ function PanelRoadmap({rems,setRems,setTab}) {
 function PanelWatch({leads,setFocusLead,setTab}) {
   var expired = (leads||[]).filter(function(l){ return l.prospect==="expired"; });
   var fsbo = (leads||[]).filter(function(l){ return l.prospect==="fsbo"; });
+  var lost = (leads||[]).filter(function(l){ return l.prospect==="lost"; }).sort(function(a,b){ return (a.listingExpires||"9999-99")<(b.listingExpires||"9999-99")?-1:1; });
   function open(l){ if(setFocusLead) setFocusLead(l.id); setTab("leads"); }
   function row(l){
     return (
@@ -880,15 +881,35 @@ function PanelWatch({leads,setFocusLead,setTab}) {
       </div>
     );
   }
+  function lostRow(l){
+    var d = l.listingExpires ? daysUntil(l.listingExpires) : null;
+    var due = d!==null && d<=0, soon = d!==null && d>0 && d<=30;
+    return (
+      <div key={l.id} onClick={function(){ open(l); }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid "+C.br,cursor:"pointer"}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:600}}>{l.first} {l.last}{l.lostTo?<span style={{fontSize:11,fontWeight:400,color:C.t3}}> · signed with {l.lostTo}</span>:null}</div>
+          <div style={{fontSize:11,color:C.t3}}>{l.addr||"—"}{l.phone?" · "+l.phone:""}</div>
+          <div style={{fontSize:11,marginTop:1,fontWeight:(due||soon)?700:400,color:due?C.ro:soon?C.go:C.t3}}>
+            {l.listingExpires ? (due ? "⏰ Listing likely expired — follow up NOW!" : soon ? ("📅 Listing expires "+fmtDate(l.listingExpires)+" (in "+d+" days) — get ready") : ("Listing expires "+fmtDate(l.listingExpires))) : "⚠️ Add their listing's expiration date on the lead card"}
+          </div>
+        </div>
+        <span style={{fontSize:11,color:C.ac}}>Open →</span>
+      </div>
+    );
+  }
   return (
     <div>
-      <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>🎯 Expired / FSBO Watchlist</div>
-      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:660}}>Homeowners worth prospecting — <b>expired listings</b> (didn't sell with their last agent) and <b>FSBO</b> (for sale by owner). Add anyone to this list from their lead card with the <b>🎯 Expired</b> / <b>🎯 FSBO</b> buttons. Tap a name to open their profile and reach out.</div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>🎯 Expired / FSBO / Lost Watchlist</div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:680}}>Homeowners worth prospecting. Add anyone from their lead card: <b>🎯 Expired</b> (didn't sell), <b>🎯 FSBO</b> (for sale by owner), or <b>🚫 Lost</b> (signed with another agent — watch for their listing to expire, then swoop back in).</div>
       <Card title={"⏳ Expired Listings (" + expired.length + ")"}>
         {expired.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — open a lead and tap 🎯 Expired to add them here.</div> : expired.map(row)}
       </Card>
       <Card title={"🏷️ For Sale By Owner (" + fsbo.length + ")"}>
         {fsbo.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — open a lead and tap 🎯 FSBO to add them here.</div> : fsbo.map(row)}
+      </Card>
+      <Card title={"🚫 Lost — Monitoring (" + lost.length + ")"}>
+        <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Sellers who listed with another agent. Watching for their listing to expire so you can follow up. Sorted by soonest expiration — 🔴 red means it's time to reach out.</div>
+        {lost.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — open a lead and tap 🚫 Lost to monitor them.</div> : lost.map(lostRow)}
       </Card>
     </div>
   );
@@ -1358,7 +1379,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     var nv = (modal.prospect===val) ? "" : val;
     setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,prospect:nv}:l; }); });
     setModal(function(m){ return {...m,prospect:nv}; });
-    setSendMsg(nv ? ("🎯 Added to your "+(nv==="expired"?"Expired listings":"FSBO")+" watchlist. See it under Expired / FSBO.") : "Removed from the Expired / FSBO watchlist.");
+    setSendMsg(nv ? ((nv==="lost"?"🚫 Marked Lost — set their listing expiration below to monitor.":("🎯 Added to your "+(nv==="expired"?"Expired listings":"FSBO")+" watchlist."))+" See it under Expired / FSBO / Lost.") : "Removed from the watchlist.");
   }
 
   function setFollowAlert(){
@@ -1727,6 +1748,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
               <Btn v="sky" onClick={function(){ addToPipeline(); }}>➕ Add to Pipeline</Btn>
               <Btn v={modal.prospect==="expired"?"gold":"def"} onClick={function(){ setProspect("expired"); }} title="Add to your Expired listings watchlist">🎯 Expired{modal.prospect==="expired"?" ✓":""}</Btn>
               <Btn v={modal.prospect==="fsbo"?"gold":"def"} onClick={function(){ setProspect("fsbo"); }} title="Add to your FSBO watchlist">🎯 FSBO{modal.prospect==="fsbo"?" ✓":""}</Btn>
+              <Btn v={modal.prospect==="lost"?"rose":"def"} onClick={function(){ setProspect("lost"); }} title="Seller signed with another agent — monitor for their listing to expire">🚫 Lost{modal.prospect==="lost"?" ✓":""}</Btn>
               <Btn v="sky" onClick={function(){ syncOneFub(modal); }}>{modal.fubId?"⟳ Update in FUB":"⟳ Push to FUB"}</Btn>
               <Btn v="sky" onClick={function(){ syncOneBrevo(modal); }}>{modal.brevoSynced?"✓ In Brevo":"📨 Add to Brevo"}</Btn>
               {confirmDelete
@@ -1738,6 +1760,18 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                 : <Btn v="rose" onClick={function(){ setConfirmDelete(true); }}>Delete</Btn>
               }
             </div>
+            {modal.prospect==="lost" && (
+              <div style={{background:"#fdecea",border:"1px solid rgba(211,47,47,0.25)",borderRadius:7,padding:"9px 11px",marginTop:8}}>
+                <div style={{fontSize:11.5,fontWeight:600,color:C.ro,marginBottom:6}}>🚫 Lost — monitoring for listing expiration</div>
+                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,color:C.t2}}>Signed with</span>
+                  <input style={{...inp,width:150,fontSize:12}} placeholder="other agent / brokerage" value={modal.lostTo||""} onChange={function(e){ saveContact("lostTo",e.target.value); }} />
+                  <span style={{fontSize:11,color:C.t2}}>Listing expires</span>
+                  <input type="date" style={{...inp,width:150,fontSize:12}} value={modal.listingExpires||""} onChange={function(e){ saveContact("listingExpires",e.target.value); }} />
+                </div>
+                <div style={{fontSize:10.5,color:C.t3,marginTop:5}}>Set the expiration date and they'll flag red in your <b>Expired / FSBO / Lost</b> watchlist when it's time to follow up.</div>
+              </div>
+            )}
             <AIBox text={aiTxt} loading={aiLd} />
             <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:8,borderTop:"1px solid "+C.br,paddingTop:10}}>
               <Btn v="primary" onClick={function(){ doGmail(modal); }}>📧 Email via Gmail</Btn>
