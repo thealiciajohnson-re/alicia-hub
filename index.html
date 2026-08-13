@@ -1679,6 +1679,17 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
               {nurtureOn(modal) && <div style={{fontSize:11,color:C.t3,marginTop:4}}>{modal.lastNurtured?"Last sent "+fmtDate(modal.lastNurtured)+" · next due "+fmtDate(nurtureNext(modal)):"Due now — find it in Auto-Nurture →"}</div>}
             </div>
             <div style={{marginBottom:8}}>
+              <div style={{fontSize:11,color:C.t3,marginBottom:4}}>🏘️ Neighborhood alerts <span style={{color:C.t3}}>— auto-email them when a home within ½ mile is listed, goes under contract, sells, or changes price</span>:</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                {[["on","On"],["off","Off"]].map(function(o){
+                  var isOn = o[0]==="on"; var active = (!!modal.neighborAlert)===isOn;
+                  return <Btn key={o[0]} v={active?"primary":"def"} style={{fontSize:11}} onClick={function(){ setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,neighborAlert:isOn,neighborAlertDate:(isOn?toDay():null)}:l; }); }); setModal(function(m){ return {...m,neighborAlert:isOn}; }); }}>{o[1]}</Btn>;
+                })}
+                {modal.neighborAlert && !String(modal.addr||"").trim() && <span style={{fontSize:11,color:C.ro}}>⚠️ Add a home address for this to work</span>}
+                {modal.neighborAlert && String(modal.addr||"").trim() && <span style={{fontSize:11,color:C.ac}}>✓ Weekly digest on — around {(modal.addr||"").split(",")[0]}</span>}
+              </div>
+            </div>
+            <div style={{marginBottom:8}}>
               <div style={{fontSize:11,color:C.t3,marginBottom:4}}>🔔 Follow-up alert <span style={{color:C.t3}}>— remind me to follow up on a specific day</span>:</div>
               <input style={{...inp,fontSize:12,marginBottom:5}} placeholder="Optional note — e.g. discuss pricing, send comps, check financing" value={fuNote} onChange={function(e){ setFuNote(e.target.value); }} />
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
@@ -1791,7 +1802,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
 
 /* ── ADD LEAD ────────────────────────────────────────────────── */
 function PanelAddLead({addLead,setTab}) {
-  var blank = {first:"",last:"",phone:"",phone2:"",email:"",email2:"",addr:"",zip:"",type:"buyer",temp:"warm",source:"Zillow",nurture:"active",timeline:"0–3 months",fdays:3,notes:"",autoNurture:"off",lastNurtured:null,bday:"",sendIntro:true};
+  var blank = {first:"",last:"",phone:"",phone2:"",email:"",email2:"",addr:"",zip:"",type:"buyer",temp:"warm",source:"Zillow",nurture:"active",timeline:"0–3 months",fdays:3,notes:"",autoNurture:"off",lastNurtured:null,bday:"",neighborAlert:false,sendIntro:true};
   var [form,setForm] = useState(blank); var [st,setSt] = useState(""); var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
   function fld(k){ return function(e){ setForm(function(p){ return {...p,[k]:e.target.value}; }); }; }
   function save(withAI) {
@@ -3171,6 +3182,7 @@ function PanelSellerAlerts({leads,setLeads,market}) {
   var [busyId,setBusyId] = useState("");
   var [showSteps,setShowSteps] = useState(true);
   var [vals,setVals] = useState({});
+  var [rcv,setRcv] = useState({});
   var [valBusy,setValBusy] = useState("");
   var [mktBusy,setMktBusy] = useState(false);
   var [mktMsg,setMktMsg] = useState("");
@@ -3214,10 +3226,23 @@ function PanelSellerAlerts({leads,setLeads,market}) {
       .then(function(d){ return (d && d.value && !d.error) ? d : null; })
       .catch(function(){ return null; });
   }
+  function fetchRentCast(l){
+    var street = streetOf(l);
+    if(!street) return Promise.resolve(null);
+    var qs = "street="+encodeURIComponent(street)+"&city="+encodeURIComponent(cityOf(l)||"")+"&state=CA"+(zipOf(l)?"&zip="+zipOf(l):"");
+    return fetch(SUPABASE_URL+"/functions/v1/rentcast?"+qs, {headers:{"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+SUPABASE_ANON_KEY}})
+      .then(function(r){ return r.json(); })
+      .then(function(d){ return (d && d.value && !d.error) ? d : null; })
+      .catch(function(){ return null; });
+  }
   function getVal(l){
     if(valBusy) return;
     setValBusy(l.id);
-    fetchAVM(l).then(function(d){ setVals(function(p){ var n={...p}; n[l.id]= d || {error:true}; return n; }); setValBusy(""); });
+    Promise.all([fetchAVM(l), fetchRentCast(l)]).then(function(arr){
+      setVals(function(p){ var n={...p}; n[l.id]= arr[0] || {error:true}; return n; });
+      setRcv(function(p){ var n={...p}; n[l.id]= arr[1] || {error:true}; return n; });
+      setValBusy("");
+    });
   }
   function valueLocal(l, ov, avm){
     var sign = "\n\nWarm regards,\n"+AGENT.name+"\n"+AGENT.phone+" | "+AGENT.email+"\nDRE #"+AGENT.lic+"\nthealiciajohnsonhomes.com";
@@ -3232,8 +3257,8 @@ function PanelSellerAlerts({leads,setLeads,market}) {
   }
   function genFor(l){
     setBusyId(l.id);
-    Promise.all([fetchAVM(l), fetchLocal(l)]).then(function(arr){
-      var avm = arr[0], loc = arr[1];
+    Promise.all([fetchAVM(l), fetchLocal(l), fetchRentCast(l)]).then(function(arr){
+      var avm = arr[0] || arr[2], loc = arr[1];
       var ov = loc ? {price:loc.median, dom:(loc.dom+" days")} : null;
       var price = ov ? ov.price : stats.price;
       var dom = ov ? ov.dom : stats.dom;
@@ -3300,8 +3325,15 @@ function PanelSellerAlerts({leads,setLeads,market}) {
                 <div style={{fontSize:11,color:C.t3}}>{l.addr||"⚠️ no address on file"}</div>
                 <div style={{fontSize:11,marginTop:3}}>
                   {valBusy===l.id ? <span style={{color:C.t3}}>⏳ Fetching value…</span>
-                   : (vals[l.id] && vals[l.id].value) ? <span style={{color:C.ac,fontWeight:700}}>🏠 Est. {vals[l.id].value}{vals[l.id].equity?<span style={{color:C.t3,fontWeight:400}}> · equity {vals[l.id].equity}</span>:null} <span style={{color:C.sk,fontWeight:400,cursor:"pointer",marginLeft:4}} onClick={function(){ getVal(l); }}>↻</span></span>
-                   : (vals[l.id] && vals[l.id].error) ? <span style={{color:C.t3}}>No value found for this address.</span>
+                   : (vals[l.id] || rcv[l.id]) ? <span style={{display:"inline-flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+                       {(vals[l.id] && vals[l.id].value)
+                         ? <span style={{color:C.ac,fontWeight:700}}>🏠 PropertyRadar {vals[l.id].value}{vals[l.id].equity?<span style={{color:C.t3,fontWeight:400}}> · equity {vals[l.id].equity}</span>:null}</span>
+                         : <span style={{color:C.t3}}>🏠 PropertyRadar — no value</span>}
+                       {(rcv[l.id] && rcv[l.id].value)
+                         ? <span style={{color:C.go,fontWeight:700}}>📊 RentCast {rcv[l.id].value}{(rcv[l.id].low&&rcv[l.id].high)?<span style={{color:C.t3,fontWeight:400}}> ({rcv[l.id].low}–{rcv[l.id].high})</span>:null}</span>
+                         : <span style={{color:C.t3}}>📊 RentCast — no value</span>}
+                       <span style={{color:C.sk,fontWeight:400,cursor:"pointer"}} onClick={function(){ getVal(l); }}>↻</span>
+                     </span>
                    : (streetOf(l) ? <span style={{color:C.sk,cursor:"pointer"}} onClick={function(){ getVal(l); }}>💲 Get est. value</span> : <span style={{color:C.t3}}>Add a street address for an estimate</span>)}
                 </div>
                 <div style={{fontSize:11,color:C.t3,fontFamily:"monospace"}}>{l.email||"⚠️ no email"}{l.sellerAlertDate?" · since "+fmtDate(l.sellerAlertDate):""}</div>
