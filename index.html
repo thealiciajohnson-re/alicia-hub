@@ -44,9 +44,7 @@ function _markSeen(arr){ (arr||[]).forEach(function(l){ if(l&&l.id!=null) _seenL
 async function loadAllState(){
   _cache = {};
   if (!supa || !_session) return;
-  // Load ONLY this hub's own keys (hub:*). Avoids pulling unrelated large rows (e.g. the Law School
-  // Hub's 500KB+ lawhub_v1) that share this table + login, which was bloating the sign-in load.
-  const { data, error } = await supa.from("hub_state").select("key,value").eq("user_id", _session.user.id).like("key","hub:%");
+  const { data, error } = await supa.from("hub_state").select("key,value").eq("user_id", _session.user.id);
   if (error) { console.error("cloud load failed", error); return; }
   (data||[]).forEach(function(row){ _cache[row.key] = row.value; });
   _markSeen(_cache[SK.leads]);
@@ -202,18 +200,13 @@ function dedupeLeads(list){
     for(var i=0;i<out.length;i++){ if(leadsMatch(out[i],l)){ m=i; break; } }
     if(m<0){ out.push(l); return; }
     var e=out[m];
-    // Prefer the RICHER record as the base so a bare FUB "buyer" copy (no address, no seller type,
-    // no enrollments) can NEVER overwrite a real lead — regardless of merge order.
-    function _rank(x){ return (x.addr?4:0)+((x.type&&x.type!=="buyer")?2:0)+(x.notes?1:0)+((x.neighborAlert||x.hvMonthly)?1:0); }
-    var base = _rank(l) > _rank(e) ? l : e, extra = base===e ? l : e;
-    out[m] = {...extra, ...base,
-      fubId:base.fubId||extra.fubId, fubSynced:base.fubSynced||extra.fubSynced,
-      email:base.email||extra.email, email2:base.email2||extra.email2, phone:base.phone||extra.phone, phone2:base.phone2||extra.phone2,
-      addr:base.addr||extra.addr, addr2:base.addr2||extra.addr2, zip:base.zip||extra.zip, lc:base.lc||extra.lc,
-      type:(base.type&&base.type!=="buyer")?base.type:((extra.type&&extra.type!=="buyer")?extra.type:(base.type||extra.type)),
-      neighborAlert:base.neighborAlert||extra.neighborAlert, hvMonthly:base.hvMonthly||extra.hvMonthly,
-      farm:base.farm||extra.farm, buyBox:base.buyBox||extra.buyBox, prospect:base.prospect||extra.prospect,
-      notes:(base.notes && extra.notes && base.notes.indexOf(extra.notes)<0) ? (base.notes+"\n"+extra.notes) : (base.notes||extra.notes)};
+    // Backfill missing fields from the dupe, keeping the existing record's values. (Safe on load;
+    // the recurring FUB auto-pull that used to abuse this is now disabled.)
+    out[m] = {...e, fubId:e.fubId||l.fubId, fubSynced:e.fubSynced||l.fubSynced,
+      email:e.email||l.email, email2:e.email2||l.email2, phone:e.phone||l.phone, phone2:e.phone2||l.phone2,
+      addr:e.addr||l.addr, addr2:e.addr2||l.addr2, zip:e.zip||l.zip, lc:e.lc||l.lc,
+      neighborAlert:e.neighborAlert||l.neighborAlert, hvMonthly:e.hvMonthly||l.hvMonthly,
+      notes:(e.notes && l.notes && e.notes.indexOf(l.notes)<0) ? (e.notes+"\n"+l.notes) : (e.notes||l.notes)};
   });
   return out;
 }
