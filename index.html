@@ -744,7 +744,7 @@ function App() {
           {tab==="campaigns" && <PanelCampaigns />}
           {tab==="social"    && <PanelSocial {...pp} />}
           {tab==="mktgemail" && <PanelMktgEmail {...pp} />}
-          {tab==="aiemail"   && <PanelAIEmail />}
+          {tab==="aiemail"   && <PanelAIEmail leads={leads} />}
           {tab==="mojo"      && <PanelMojo />}
           {tab==="rs"        && <PanelRS {...pp} />}
           {tab==="selleralerts" && <PanelSellerAlerts {...pp} />}
@@ -1448,9 +1448,9 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   }
   function stamp(){ try{ return new Date().toISOString().slice(0,10); }catch(e){ return "backup"; } }
   function exportCSV(){
-    var cols = ["First","Last","Phone","Phone 2","Email","Email 2","Address","Type","Temp","Source","Timeline","Nurture","Follow-up","Last contact","Notes"];
+    var cols = ["First","Last","Phone","Phone 2","Email","Email 2","Address","Type","Temp","Source","Farm","Buy-box","Ad campaign","Timeline","Nurture","Follow-up","Last contact","Notes"];
     function esc(v){ v = (v==null?"":String(v)); return '"'+v.replace(/"/g,'""')+'"'; }
-    var rows = leads.map(function(l){ return [l.first,l.last,l.phone,l.phone2,l.email,l.email2,l.addr,l.type,l.temp,l.source,l.timeline,l.nurture,l.fu,l.lc,l.notes].map(esc).join(","); });
+    var rows = leads.map(function(l){ return [l.first,l.last,l.phone,l.phone2,l.email,l.email2,l.addr,l.type,l.temp,l.source,l.farm,l.buyBox,l.adCampaign,l.timeline,l.nurture,l.fu,l.lc,l.notes].map(esc).join(","); });
     download("alicia-leads-"+stamp()+".csv", cols.map(esc).join(",")+"\r\n"+rows.join("\r\n"), "text/csv;charset=utf-8");
   }
   function exportJSON(){
@@ -1545,7 +1545,10 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     else { setSendMsg("Couldn't copy — select the text below."); }
   }
 
-  var SRCS = ["Zillow","Realtor.com","Referral","Sphere","Open House","Cold Call","Other"];
+  var SRCS = ["Home Value Quiz","Facebook Lead Ad","Instagram","TikTok","Zillow","Realtor.com","Referral","Sphere","Open House","Cold Call","Other"];
+  var FARMS = ["Napa","Marin","Sonoma","Mendocino"];
+  var BOXES = ["<$600k","$600–900k","$900k–1.2M","$1.2M+"];
+  var isPaidSrc = function(s){ return /Quiz|Lead Ad|Instagram|TikTok|Facebook|Social/i.test(s||""); };
   var THS = ["Name","Phone / Email","Address","Type","Temp","Source","Nurture","Follow-up",""];
 
   return (
@@ -1632,7 +1635,19 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                 <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}><Tag t={modal.temp}>{TICON[modal.temp]} {modal.temp}</Tag></div>
                 <div style={{fontSize:11,color:C.t3,marginBottom:3}}>Source</div>
                 <select style={{...inp,fontSize:12,marginBottom:6}} value={modal.source||""} onChange={function(e){ saveContact("source",e.target.value); }}>{SRCS.indexOf(modal.source)<0 && modal.source ? <option value={modal.source}>{modal.source}</option> : null}{SRCS.map(function(s){ return <option key={s} value={s}>{s}</option>; })}</select>
-                <div style={{fontSize:12,color:C.t2}}>Timeline: {modal.timeline}</div>
+                <div style={{fontSize:11,color:C.t3,marginBottom:3}}>Farm area · Buy-box</div>
+                <div style={{display:"flex",gap:5,marginBottom:6}}>
+                  <select style={{...inp,fontSize:12,flex:1}} value={modal.farm||""} onChange={function(e){ saveContact("farm",e.target.value); }}><option value="">Farm…</option>{FARMS.map(function(f){ return <option key={f} value={f}>{f}</option>; })}</select>
+                  <select style={{...inp,fontSize:12,flex:1}} value={modal.buyBox||""} onChange={function(e){ saveContact("buyBox",e.target.value); }}><option value="">Buy-box…</option>{BOXES.map(function(b){ return <option key={b} value={b}>{b}</option>; })}</select>
+                </div>
+                {isPaidSrc(modal.source) && <input style={{...inp,fontSize:12,marginBottom:6}} placeholder="Ad campaign name / ID" value={modal.adCampaign||""} onChange={function(e){ saveContact("adCampaign",e.target.value); }} />}
+                <div style={{fontSize:11,color:C.t3,marginBottom:3}}>Email enrollments</div>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:4}}>
+                  <Btn v={modal.hvMonthly?"primary":"def"} style={{fontSize:10,padding:"3px 9px"}} title="Monthly home-value estimate email" onClick={function(){ saveContact("hvMonthly", !modal.hvMonthly); }}>{modal.hvMonthly?"📈 Monthly value ✓":"📈 Monthly value"}</Btn>
+                  <Btn v={modal.neighborAlert?"primary":"def"} style={{fontSize:10,padding:"3px 9px"}} title="Nearby listing-activity emails" onClick={function(){ saveContact("neighborAlert", !modal.neighborAlert); }}>{modal.neighborAlert?"🏘️ Neighborhood ✓":"🏘️ Neighborhood"}</Btn>
+                </div>
+                {(modal.hvMonthly||modal.neighborAlert) && !(modal.addr||"").trim() && <div style={{fontSize:10,color:"#b26a00",marginBottom:6}}>⚠️ Add a full street address above — these emails need it to work.</div>}
+                <div style={{fontSize:12,color:C.t2,marginTop:4}}>Timeline: {modal.timeline}</div>
                 <div style={{fontSize:12,color:C.t2}}>Nurture: {NLBL[modal.nurture]||modal.nurture}</div>
                 <div style={{fontSize:12,color:C.t2}}>Follow-up: {fmtDate(modal.fu)}</div>
                 <div style={{fontSize:12,color:C.t2}}>Last contact: {modal.lc||"Never"}</div>
@@ -1710,8 +1725,9 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                       <div key={e.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,background:ap.colorL,border:"1px solid "+ap.colorB,borderRadius:7,padding:"6px 10px"}}>
                         <div style={{flex:1}}>
                           <div style={{fontSize:12,fontWeight:600,color:ap.color}}>{ap.label}</div>
-                          <div style={{fontSize:11,color:C.t3}}>{e.done.length}/{ap.steps.length} steps · {pct}%</div>
+                          <div style={{fontSize:11,color:C.t3}}>{e.done.length}/{ap.steps.length} steps · {pct}%{e.autopilot?" · 🤖 auto-sending emails":""}</div>
                         </div>
+                        <Btn v={e.autopilot?"primary":"def"} style={{fontSize:10,padding:"2px 7px"}} title="Auto-send this plan's EMAIL steps on schedule. Calls & texts become reminders for you." onClick={function(){ setEnrolled(function(p){ return p.map(function(x){ return x.id===e.id?{...x,autopilot:!x.autopilot}:x; }); }); }}>{e.autopilot?"🤖 Autopilot ✓":"🤖 Autopilot"}</Btn>
                         <Btn v="rose" style={{fontSize:10,padding:"2px 7px"}} onClick={function(){ setEnrolled(function(p){ return p.filter(function(x){ return x.id!==e.id; }); }); }}>✕ Remove</Btn>
                       </div>
                     );
@@ -1733,18 +1749,6 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
             </div>
             </div>}
             <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:8}}>
-              <Btn v="primary" onClick={function(){ draftMsg(modal); }}>Draft follow-up</Btn>
-              <Btn v="gold" onClick={function(){ draftMsgAI(modal); }}>✨ AI draft</Btn>
-              <Btn v="sky" onClick={function(){ draftMarketAI(modal); }}>📊 Market update</Btn>
-              {(listings&&listings.length>0)
-                ? <span style={{display:"inline-flex",gap:4,alignItems:"center"}}>
-                    <select style={{...inp,width:150,fontSize:11}} value={selListing||(listings[0]&&listings[0].id)||""} onChange={function(e){ setSelListing(e.target.value); }}>
-                      {listings.map(function(x){ return <option key={x.id} value={x.id}>{(x.addr||"Listing").slice(0,30)}</option>; })}
-                    </select>
-                    <Btn v="sky" onClick={function(){ draftListingAI(modal); }}>🏡 New listing</Btn>
-                  </span>
-                : <Btn v="sky" onClick={function(){ draftListingAI(modal); }} title="Tip: save a home in My Listings to auto-fill the details">🏡 New listing</Btn>
-              }
               <Btn v="gold" onClick={function(){ setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,lc:toDay(),log:[...(l.log||[]),toDay()+" — contact logged"]}:l; }); }); setModal(function(m){ return {...m,lc:toDay()}; }); }}>Log contact</Btn>
               <Btn v="sky" onClick={function(){ addToPipeline(); }}>➕ Add to Pipeline</Btn>
               <Btn v={modal.prospect==="expired"?"gold":"def"} onClick={function(){ setProspect("expired"); }} title="Add to your Expired listings watchlist">🎯 Expired{modal.prospect==="expired"?" ✓":""}</Btn>
@@ -1773,7 +1777,8 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                 <div style={{fontSize:10.5,color:C.t3,marginTop:5}}>Set the expiration date and they'll flag red in your <b>Expired / FSBO / Lost</b> watchlist when it's time to follow up.</div>
               </div>
             )}
-            <AIBox text={aiTxt} loading={aiLd} />
+            <AIBox text={aiTxt||draftMsgLocal(modal)} loading={aiLd} />
+            <div style={{fontSize:10.5,color:C.t3,marginTop:6}}>Need a custom or AI-written email? Use <b>AI Email Writer</b> (left menu) — start typing this lead's name in the To box and it'll pop up.</div>
             <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:8,borderTop:"1px solid "+C.br,paddingTop:10}}>
               <Btn v="primary" onClick={function(){ doGmail(modal); }}>📧 Email via Gmail</Btn>
               <Btn v="gold" onClick={function(){ sendViaBrevo(modal); }}>📨 Send via Brevo (tracked)</Btn>
@@ -1812,7 +1817,7 @@ function PanelAddLead({addLead,setTab}) {
     if (withAI) { setAL(true); callAI("Write a short warm first-contact "+(form.type==="seller"?"text":"email")+" from "+AGENT.name+" ("+AGENT.co+") to "+form.first+", a new "+form.type+" lead from "+form.source+". Under 60 words, warm, ends with easy question.").then(function(t){ setAT(t); setAL(false); }); }
     setForm(blank);
   }
-  var SRCS = "Zillow,Realtor.com,Referral,Sphere,Open House,Cold Call,Social Media,Other".split(",");
+  var SRCS = "Home Value Quiz,Facebook Lead Ad,Instagram,TikTok,Zillow,Realtor.com,Referral,Sphere,Open House,Cold Call,Social Media,Other".split(",");
   return (
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:14}}>Add Lead</div>
@@ -2946,9 +2951,12 @@ function PanelCampaigns() {
 }
 
 /* ── AI EMAIL ────────────────────────────────────────────────── */
-function PanelAIEmail() {
-  var [form,setForm] = useState({to:"",subject:"",prompt:""}); var [email,setEmail] = useState(""); var [ld,setLd] = useState(false); var [st,setSt] = useState(""); var [noKey,setNoKey] = useState(false);
+function PanelAIEmail({leads}) {
+  var [form,setForm] = useState({to:"",subject:"",prompt:""}); var [email,setEmail] = useState(""); var [ld,setLd] = useState(false); var [st,setSt] = useState(""); var [noKey,setNoKey] = useState(false); var [showSug,setShowSug] = useState(false);
   function fld(k){ return function(e){ setForm(function(p){ return {...p,[k]:e.target.value}; }); }; }
+  var toLeads = leads||[];
+  function toName(){ var t=(form.to||"").trim().toLowerCase(); var m=toLeads.filter(function(l){ return l.email && ((l.first||"")+" "+(l.last||"")).trim().toLowerCase()===t; })[0]; return m?((m.first||"")+" "+(m.last||"")).trim():""; }
+  function suggestions(){ var t=(form.to||"").trim().toLowerCase(); if(!t || t.indexOf("@")>-1) return []; return toLeads.filter(function(l){ return l.email && (((l.first||"")+" "+(l.last||"")).toLowerCase().indexOf(t)>-1 || (l.email||"").toLowerCase().indexOf(t)>-1); }).slice(0,6); }
   function gen() {
     if(!form.prompt.trim()){ setSt("Tell the writer what the email should say first."); return; }
     setNoKey(false); setLd(true); setEmail(""); setSt("");
@@ -2958,7 +2966,7 @@ function PanelAIEmail() {
       setLd(false);
     });
   }
-  function recipient(){ return form.to.indexOf("@")>-1 ? form.to.trim() : ""; }
+  function recipient(){ var t=(form.to||"").trim(); if(t.indexOf("@")>-1) return t; var m=toLeads.filter(function(l){ return l.email && ((l.first||"")+" "+(l.last||"")).trim().toLowerCase()===t.toLowerCase(); })[0]; return m?m.email:""; }
   function sendGmail() {
     if(!email) return;
     window.open("https://mail.google.com/mail/?view=cm&fs=1&authuser="+encodeURIComponent(AGENT.email)+"&to="+encodeURIComponent(recipient())+"&su="+encodeURIComponent(form.subject||"")+"&body="+encodeURIComponent(email),"_blank");
@@ -2979,7 +2987,8 @@ function PanelAIEmail() {
     if(!to){ setSt("Add a valid email address in the To field to send via Brevo."); return; }
     if(!(form.subject||"").trim()){ setSt("Add a subject line to send via Brevo."); return; }
     setSt("📨 Sending tracked email via Brevo…");
-    callBrevo("send",{to:[{email:to}], subject:form.subject, html:brandedEmailHtml(email, null, {footer:false}), senderEmail:BREVO_SENDER, senderName:AGENT.name, replyTo:AGENT.email, tags:["ai-email"]}).then(function(res){
+    var rn=toName();
+    callBrevo("send",{to:[rn?{email:to,name:rn}:{email:to}], subject:form.subject, html:brandedEmailHtml(email, null, {footer:false}), senderEmail:BREVO_SENDER, senderName:AGENT.name, replyTo:AGENT.email, tags:["ai-email"]}).then(function(res){
       if(res && res.messageId) setSt("✓ Sent via Brevo to "+to+" — opens & clicks will track in your Brevo dashboard.");
       else setSt("⚠️ Brevo send failed: "+((res&&res.error)||(res&&res.data&&res.data.message)||"unknown")+". Make sure your sender is verified in Brevo.");
     });
@@ -2989,7 +2998,14 @@ function PanelAIEmail() {
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:14}}>AI Email Writer</div>
       <Card>
-        <Row><Fld label="To"><input style={inp} placeholder="Dennis Spero or dsspero@comcast.net" value={form.to} onChange={fld("to")} /></Fld><Fld label="Subject"><input style={inp} placeholder="Your listing appointment recap" value={form.subject} onChange={fld("subject")} /></Fld></Row>
+        <Row><Fld label="To"><div style={{position:"relative"}}>
+          <input style={inp} placeholder="Type a lead's name or an email…" value={form.to} onChange={function(e){ fld("to")(e); setShowSug(true); }} onFocus={function(){ setShowSug(true); }} onBlur={function(){ setTimeout(function(){ setShowSug(false); },150); }} />
+          {showSug && suggestions().length>0 && <div style={{position:"absolute",zIndex:30,left:0,right:0,top:"100%",background:"#fff",border:"1px solid "+C.br,borderRadius:8,marginTop:2,boxShadow:"0 6px 18px rgba(0,0,0,0.12)",maxHeight:230,overflow:"auto"}}>
+            {suggestions().map(function(l){ return <div key={l.id} onMouseDown={function(){ setForm(function(p){ return {...p,to:l.email}; }); setShowSug(false); }} style={{padding:"8px 10px",cursor:"pointer",borderBottom:"1px solid "+C.br}}>
+              <div style={{fontSize:13,fontWeight:600}}>{l.first} {l.last}</div><div style={{fontSize:11,color:C.t3}}>{l.email} · {l.type}</div></div>; })}
+          </div>}
+          {recipient() && form.to.indexOf("@")<0 && <div style={{fontSize:11,color:"#2e7d32",marginTop:3}}>→ {toName()} &lt;{recipient()}&gt;</div>}
+        </div></Fld><Fld label="Subject"><input style={inp} placeholder="Your listing appointment recap" value={form.subject} onChange={fld("subject")} /></Fld></Row>
         <Fld label="What should this email say?"><textarea style={{...inp,minHeight:80,resize:"vertical",lineHeight:1.5}} placeholder="e.g. Thank Dennis for the listing appt. Recap $715k pricing. Confirm photos Tuesday, go live Friday." value={form.prompt} onChange={fld("prompt")} /></Fld>
         <div style={{display:"flex",gap:7,marginTop:8,flexWrap:"wrap"}}>
           <Btn v="primary" onClick={gen}>✨ Generate Email</Btn>
