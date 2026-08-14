@@ -39,12 +39,15 @@ const supa = SUPA_CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON
 let _session = null;
 let _cache = {};
 const _saveTimers = {};
+let _seenLeadIds = {};   // every lead id this session has ever held — lets save() tell an automation-added lead (never seen) from one the user deleted (seen, now gone).
+function _markSeen(arr){ (arr||[]).forEach(function(l){ if(l&&l.id!=null) _seenLeadIds[String(l.id)]=1; }); }
 async function loadAllState(){
   _cache = {};
   if (!supa || !_session) return;
   const { data, error } = await supa.from("hub_state").select("key,value").eq("user_id", _session.user.id);
   if (error) { console.error("cloud load failed", error); return; }
   (data||[]).forEach(function(row){ _cache[row.key] = row.value; });
+  _markSeen(_cache[SK.leads]);
 }
 async function sget(k){ return (k in _cache) ? _cache[k] : null; }
 async function sset(k,v){
@@ -52,10 +55,25 @@ async function sset(k,v){
   if (!supa || !_session) return;
   clearTimeout(_saveTimers[k]);
   _saveTimers[k] = setTimeout(function(){
-    supa.from("hub_state").upsert(
-      { user_id:_session.user.id, key:k, value:v, updated_at:new Date().toISOString() },
-      { onConflict:"user_id,key" }
-    ).then(function(res){ if (res.error) console.error("cloud save failed: "+k, res.error); });
+    (async function(){
+      let toSave = v;
+      try {
+        // Leads can be added server-side by automations (expired listings, quiz + home-value leads) while the
+        // app is open. Merge those in on save so we never blind-overwrite them. A DB lead is kept only if we've
+        // NEVER seen its id — an id we've seen but no longer hold was deleted by the user, so we let it go.
+        if (k === SK.leads && Array.isArray(v)) {
+          const res0 = await supa.from("hub_state").select("value").eq("user_id",_session.user.id).eq("key",k).maybeSingle();
+          const dbLeads = (res0 && res0.data && Array.isArray(res0.data.value)) ? res0.data.value : [];
+          const have = {}; v.forEach(function(l){ if(l&&l.id!=null) have[String(l.id)]=1; });
+          const extras = dbLeads.filter(function(l){ return l && l.id!=null && !have[String(l.id)] && !_seenLeadIds[String(l.id)]; });
+          if (extras.length) { toSave = extras.concat(v); _cache[k] = toSave; if (typeof window!=="undefined" && window.__mergeLeads) window.__mergeLeads(extras); }
+        }
+      } catch(e){ console.error("leads merge check failed, saving as-is", e); toSave = v; }
+      supa.from("hub_state").upsert(
+        { user_id:_session.user.id, key:k, value:toSave, updated_at:new Date().toISOString() },
+        { onConflict:"user_id,key" }
+      ).then(function(res){ if (res.error) console.error("cloud save failed: "+k, res.error); });
+    })();
   }, 400);
 }
 
@@ -574,7 +592,17 @@ function App() {
     })();
   }, []);
 
-  useEffect(function(){ if (ready) sset(SK.leads,leads); }, [leads,ready]);
+  useEffect(function(){
+    if (!ready) return;
+    _markSeen(leads);
+    // Called by sset() when it finds automation-added leads in the DB — surface them in the UI immediately.
+    window.__mergeLeads = function(extras){
+      if (!extras || !extras.length) return;
+      _markSeen(extras);
+      setLeads(function(p){ var have={}; p.forEach(function(x){ if(x&&x.id!=null) have[String(x.id)]=1; }); var add=extras.filter(function(x){ return x&&x.id!=null&&!have[String(x.id)]; }); return add.length ? add.concat(p) : p; });
+    };
+    sset(SK.leads,leads);
+  }, [leads,ready]);
   useEffect(function(){ if (ready) sset(SK.rems,rems); }, [rems,ready]);
 
   // Weekly nudge: always keep one upcoming "Run Auto-Nurture queue" reminder (next Monday).
@@ -864,20 +892,24 @@ function PanelRoadmap({rems,setRems,setTab}) {
 }
 
 /* ── EXPIRED / FSBO WATCHLIST ────────────────────────────────── */
-function PanelWatch({leads,setFocusLead,setTab}) {
+function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   var expired = (leads||[]).filter(function(l){ return l.prospect==="expired"; });
   var fsbo = (leads||[]).filter(function(l){ return l.prospect==="fsbo"; });
   var lost = (leads||[]).filter(function(l){ return l.prospect==="lost"; }).sort(function(a,b){ return (a.listingExpires||"9999-99")<(b.listingExpires||"9999-99")?-1:1; });
   function open(l){ if(setFocusLead) setFocusLead(l.id); setTab("leads"); }
+  function toNurture(l){ if(setLeads) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,prospect:"",nurture:"monthly",temp:"warm",log:[...(x.log||[]),toDay()+" — Converted from Expired to nurture"]}:x; }); }); }
+  function del(l){ if(!(typeof window!=="undefined"&&window.confirm)||window.confirm("Delete this lead as a dead lead? This can't be undone.")){ if(dismissLead) dismissLead(l); if(setLeads) setLeads(function(p){ return p.filter(function(x){ return x.id!==l.id; }); }); } }
   function row(l){
     return (
-      <div key={l.id} onClick={function(){ open(l); }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid "+C.br,cursor:"pointer"}}>
-        <div style={{flex:1}}>
+      <div key={l.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid "+C.br}}>
+        <div style={{flex:1,cursor:"pointer"}} onClick={function(){ open(l); }}>
           <div style={{fontSize:13,fontWeight:600}}>{l.first} {l.last}</div>
-          <div style={{fontSize:11,color:C.t3}}>{l.addr||"—"}{l.phone?" · "+l.phone:""}{l.lc?" · last contact "+fmtDate(l.lc):" · not contacted yet"}</div>
+          <div style={{fontSize:11,color:C.t3}}>{l.addr||"—"}{l.phone?" · "+l.phone:""}{l.source?" · "+l.source:""}{l.lc?" · last contact "+fmtDate(l.lc):" · not contacted yet"}</div>
         </div>
         <Tag t={l.temp==="hot"?"hot":l.temp==="warm"?"warm":"new"}>{l.temp}</Tag>
-        <span style={{fontSize:11,color:C.ac}}>Open →</span>
+        <Btn style={{fontSize:10,padding:"3px 8px"}} title="Convert to a nurtured lead (monthly touch) and remove from this watchlist" onClick={function(e){ e.stopPropagation(); toNurture(l); }}>→ Nurture</Btn>
+        <Btn v="rose" style={{fontSize:10,padding:"3px 8px"}} title="Delete as a dead lead" onClick={function(e){ e.stopPropagation(); del(l); }}>🗑</Btn>
+        <span style={{fontSize:11,color:C.ac,cursor:"pointer"}} onClick={function(){ open(l); }}>Open →</span>
       </div>
     );
   }
@@ -1592,8 +1624,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br,fontSize:12,color:C.t2}}>{NLBL[l.nurture]||l.nurture}{nurtureOn(l)?<span title={"Auto-nurture: "+NURLBL[l.autoNurture]+(nurtureDue(l)?" (due now)":"")} style={{marginLeft:4,color:nurtureDue(l)?C.go:C.t3}}>🔄</span>:null}</td>
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br,fontSize:11,fontFamily:"monospace",color:l.fu<=toDay()?C.ro:C.t3}}>{fmtDate(l.fu)}</td>
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br}}>
-                      <Btn onClick={function(){ setModal(l); setAT(""); }} style={{fontSize:10,padding:"3px 8px",marginRight:3}}>View</Btn>
-                      <Btn v="sky" onClick={function(){ setModal(l); setAT(draftMsgLocal(l)); }} style={{fontSize:10,padding:"3px 8px"}}>Draft</Btn>
+                      <Btn onClick={function(){ setModal(l); setAT(""); }} style={{fontSize:10,padding:"3px 8px"}}>View</Btn>
                     </td>
                   </tr>
                 );
@@ -1777,16 +1808,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                 <div style={{fontSize:10.5,color:C.t3,marginTop:5}}>Set the expiration date and they'll flag red in your <b>Expired / FSBO / Lost</b> watchlist when it's time to follow up.</div>
               </div>
             )}
-            <AIBox text={aiTxt||draftMsgLocal(modal)} loading={aiLd} />
-            <div style={{fontSize:10.5,color:C.t3,marginTop:6}}>Need a custom or AI-written email? Use <b>AI Email Writer</b> (left menu) — start typing this lead's name in the To box and it'll pop up.</div>
-            <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:8,borderTop:"1px solid "+C.br,paddingTop:10}}>
-              <Btn v="primary" onClick={function(){ doGmail(modal); }}>📧 Email via Gmail</Btn>
-              <Btn v="gold" onClick={function(){ sendViaBrevo(modal); }}>📨 Send via Brevo (tracked)</Btn>
-              <Btn onClick={function(){ checkOpens(modal); }}>📬 Check opens</Btn>
-              <Btn v="sky" onClick={function(){ doText(modal); }}>💬 Text</Btn>
-              <Btn onClick={function(){ doCopy(modal); }}>📋 Copy draft</Btn>
-            </div>
-            <div style={{fontSize:10.5,color:C.t3,marginTop:5}}><b>Gmail</b> opens compose as <b>{AGENT.email}</b> with the draft above (2nd email auto-CC'd). <b>Send via Brevo</b> sends the draft instantly and tracks opens & clicks — tap <b>📬 Check opens</b> afterward to see if they read it. (No Mailtrack needed for Brevo sends.)</div>
+            <div style={{fontSize:10.5,color:C.t3,marginTop:8}}>✉️ To email this lead, use <b>AI Email Writer</b> (left menu) — start typing their name in the To box and it'll pop up.</div>
             {sendMsg && <div style={{fontSize:11.5,color:C.ac,marginTop:5}}>{sendMsg}</div>}
           </div>
         </div>
