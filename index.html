@@ -44,7 +44,9 @@ function _markSeen(arr){ (arr||[]).forEach(function(l){ if(l&&l.id!=null) _seenL
 async function loadAllState(){
   _cache = {};
   if (!supa || !_session) return;
-  const { data, error } = await supa.from("hub_state").select("key,value").eq("user_id", _session.user.id);
+  // Load ONLY this hub's own keys (hub:*). Avoids pulling unrelated large rows (e.g. the Law School
+  // Hub's 500KB+ lawhub_v1) that share this table + login, which was bloating the sign-in load.
+  const { data, error } = await supa.from("hub_state").select("key,value").eq("user_id", _session.user.id).like("key","hub:%");
   if (error) { console.error("cloud load failed", error); return; }
   (data||[]).forEach(function(row){ _cache[row.key] = row.value; });
   _markSeen(_cache[SK.leads]);
