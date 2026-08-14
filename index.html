@@ -1670,7 +1670,10 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br,fontSize:12,color:C.t2}}>{NLBL[l.nurture]||l.nurture}{nurtureOn(l)?<span title={"Auto-nurture: "+NURLBL[l.autoNurture]+(nurtureDue(l)?" (due now)":"")} style={{marginLeft:4,color:nurtureDue(l)?C.go:C.t3}}>🔄</span>:null}</td>
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br,fontSize:11,fontFamily:"monospace",color:l.fu<=toDay()?C.ro:C.t3}}>{fmtDate(l.fu)}</td>
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br}}>
-                      <Btn onClick={function(){ setModal(l); setAT(""); }} style={{fontSize:10,padding:"3px 8px"}}>View</Btn>
+                      <div style={{display:"flex",gap:5,justifyContent:"flex-end"}}>
+                        {(l.phone||"").trim() && <Btn v="sky" onClick={function(){ gvText(l); }} style={{fontSize:10,padding:"3px 8px"}} title="Copy an opener + open Google Voice to text this lead">💬 Text</Btn>}
+                        <Btn onClick={function(){ setModal(l); setAT(""); }} style={{fontSize:10,padding:"3px 8px"}}>View</Btn>
+                      </div>
                     </td>
                   </tr>
                 );
