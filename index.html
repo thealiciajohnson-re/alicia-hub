@@ -762,7 +762,7 @@ function App() {
           </div>
         </nav>
 
-        <main style={{flex:1,padding:"16px 18px",overflowY:"auto",maxWidth:920}}>
+        <main style={{flex:1,padding:"16px 18px",overflowY:"auto",maxWidth:1400}}>
           {tab==="dashboard" && <PanelDash {...pp} />}
           {tab==="calendar"  && <PanelCal {...pp} />}
           {tab==="rems"      && <PanelRems {...pp} />}
@@ -1654,8 +1654,8 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
       {filtered.length===0 ? (
         <Card><div style={{color:C.t3,fontSize:13,textAlign:"center",padding:20}}>No leads found. <span style={{color:C.ac,cursor:"pointer"}} onClick={function(){ setTab("addlead"); }}>Add a lead →</span></div></Card>
       ) : (
-        <div style={{background:C.sur,border:"1px solid "+C.br,borderRadius:11,overflow:"hidden"}}>
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <div style={{background:C.sur,border:"1px solid "+C.br,borderRadius:11,overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:760}}>
             <thead><tr>{THS.map(function(h){ var sortable=(h!=="Phone / Email"&&h!==""); return <th key={h} onClick={function(){ clickSort(h); }} style={{fontSize:10,fontWeight:700,color:sortKey===h?C.ac:C.t3,textAlign:"left",padding:"7px 10px",borderBottom:"1px solid "+C.br,textTransform:"uppercase",letterSpacing:".06em",background:C.s2,cursor:sortable?"pointer":"default",userSelect:"none"}}>{h}{sortKey===h?(sortDir>0?" ▲":" ▼"):(sortable&&h?" ⇅":"")}</th>; })}</tr></thead>
             <tbody>
               {filtered.map(function(l){
