@@ -949,13 +949,13 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
         <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Expireds you've already contacted or added by hand — the ones you're actively working.</div>
         {expired.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — cold-call a new expired above (✓ Contacted), or tap 🎯 Expired on any lead.</div> : expired.map(row)}
       </Card>
-      <Card title={"🏚️ New Foreclosures — Cold Call (" + foreNew.length + ")"}>
-        <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Fresh foreclosure & pre-foreclosure properties auto-pulled from your PropertyRadar alert emails. You only get the address — <b>open each one to add the owner's name & phone</b>, then cold call. Tap <b>✓ Contacted</b> once you've reached out.</div>
-        {foreNew.length===0 ? <div style={{color:C.t3,fontSize:13}}>None right now — new foreclosures from your PropertyRadar email land here automatically.</div> : foreNew.map(row)}
+      <Card title={"🏚️ New Prospect Leads — Cold Call (" + foreNew.length + ")"}>
+        <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Motivated-seller properties auto-pulled from your <b>PropertyRadar</b> & <b>Auction.com</b> lists — <b>Foreclosure · Pre-Foreclosure · Divorce · Auction</b>, etc. Each lead is tagged with the list it came from (shown on the row). You get the address only — <b>open each to add the owner's name & phone</b>, then cold call. Tap <b>✓ Contacted</b> once you've reached out.</div>
+        {foreNew.length===0 ? <div style={{color:C.t3,fontSize:13}}>None right now — new properties from your PropertyRadar / Auction.com lists land here automatically.</div> : foreNew.map(row)}
       </Card>
-      <Card title={"🏚️ Foreclosures — Working (" + foreWork.length + ")"}>
-        <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Foreclosures you've already contacted or added by hand.</div>
-        {foreWork.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — cold-call a new foreclosure above (✓ Contacted).</div> : foreWork.map(row)}
+      <Card title={"🏚️ Prospect Leads — Working (" + foreWork.length + ")"}>
+        <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Foreclosure / divorce / pre-foreclosure leads you've already contacted or added by hand.</div>
+        {foreWork.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — cold-call a new one above (✓ Contacted).</div> : foreWork.map(row)}
       </Card>
       <Card title={"🏷️ For Sale By Owner (" + fsbo.length + ")"}>
         {fsbo.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — open a lead and tap 🎯 FSBO to add them here.</div> : fsbo.map(row)}
