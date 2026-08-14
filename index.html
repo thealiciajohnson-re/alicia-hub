@@ -906,8 +906,10 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   // Once you tap ✓ Contacted they move into your regular watched-Expired list, alongside ones you added by hand.
   var expiredNew = (leads||[]).filter(function(l){ return l.prospect==="expired" && l.mlNum && !l.contacted; });
   var expired = (leads||[]).filter(function(l){ return l.prospect==="expired" && !(l.mlNum && !l.contacted); });
-  var foreNew = (leads||[]).filter(function(l){ return l.prospect==="foreclosure" && !l.contacted; });
-  var foreWork = (leads||[]).filter(function(l){ return l.prospect==="foreclosure" && l.contacted; });
+  // Auto-captured foreclosures (from PropertyRadar/Auction, marked with listName) start in the cold-call inbox.
+  // Manually-flagged foreclosures (no listName) go straight to the working/watching list.
+  var foreNew = (leads||[]).filter(function(l){ return l.prospect==="foreclosure" && l.listName && !l.contacted; });
+  var foreWork = (leads||[]).filter(function(l){ return l.prospect==="foreclosure" && !(l.listName && !l.contacted); });
   var fsbo = (leads||[]).filter(function(l){ return l.prospect==="fsbo"; });
   var lost = (leads||[]).filter(function(l){ return l.prospect==="lost"; }).sort(function(a,b){ return (a.listingExpires||"9999-99")<(b.listingExpires||"9999-99")?-1:1; });
   function open(l){ if(setFocusLead) setFocusLead(l.id); setTab("leads"); }
@@ -915,7 +917,7 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   function markContacted(l){ if(setLeads) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,contacted:true,lc:toDay(),log:[...(x.log||[]),toDay()+" — Cold-called (moved to watching)"]}:x; }); }); }
   function del(l){ if(!(typeof window!=="undefined"&&window.confirm)||window.confirm("Delete this lead as a dead lead? This can't be undone.")){ if(dismissLead) dismissLead(l); if(setLeads) setLeads(function(p){ return p.filter(function(x){ return x.id!==l.id; }); }); } }
   function row(l){
-    var isNew = !l.contacted && (l.mlNum || l.radarId || l.prospect==="foreclosure");
+    var isNew = !l.contacted && (l.mlNum || l.radarId || (l.prospect==="foreclosure" && l.listName));
     return (
       <div key={l.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid "+C.br}}>
         <div style={{flex:1,cursor:"pointer"}} onClick={function(){ open(l); }}>
@@ -1445,7 +1447,8 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     var nv = (modal.prospect===val) ? "" : val;
     setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,prospect:nv}:l; }); });
     setModal(function(m){ return {...m,prospect:nv}; });
-    setSendMsg(nv ? ((nv==="lost"?"🚫 Marked Lost — set their listing expiration below to monitor.":("🎯 Added to your "+(nv==="expired"?"Expired listings":"FSBO")+" watchlist."))+" See it under Expired / FSBO / Lost.") : "Removed from the watchlist.");
+    var _plbl = {expired:"Expired listings", fsbo:"FSBO", foreclosure:"Foreclosure", lost:"Lost"};
+    setSendMsg(nv ? ((nv==="lost"?"🚫 Marked Lost — set their listing expiration below to monitor.":("🏚️ Added to your "+_plbl[nv]+" watchlist."))+" See it under the Watchlist tab.") : "Removed from the watchlist.");
   }
 
   function setFollowAlert(){
@@ -1488,7 +1491,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   var filtered = leads.filter(function(l){
     // Hide un-worked prospecting properties from the main list until you work them (✓ Contacted or → Nurture).
     // All foreclosure/auction leads are auto-captured; expireds are auto only when they carry an MLS number.
-    if (!l.contacted && (l.prospect==="foreclosure" || (l.prospect==="expired" && (l.mlNum||l.radarId)))) return false;
+    if (!l.contacted && ((l.prospect==="foreclosure" && l.listName) || (l.prospect==="expired" && (l.mlNum||l.radarId)))) return false;
     var q = (l.first+" "+l.last+" "+l.phone+" "+l.email+" "+(l.phone2||"")+" "+(l.email2||"")+" "+(l.addr||"")+" "+(l.addr2||"")).toLowerCase();
     return (!srch||q.includes(srch.toLowerCase())) && (!fT||l.type===fT) && (!fTp||l.temp===fTp) && (!fS||l.source===fS);
   });
@@ -1850,6 +1853,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
               <Btn v="sky" onClick={function(){ addToPipeline(); }}>➕ Add to Pipeline</Btn>
               <Btn v={modal.prospect==="expired"?"gold":"def"} onClick={function(){ setProspect("expired"); }} title="Add to your Expired listings watchlist">🎯 Expired{modal.prospect==="expired"?" ✓":""}</Btn>
               <Btn v={modal.prospect==="fsbo"?"gold":"def"} onClick={function(){ setProspect("fsbo"); }} title="Add to your FSBO watchlist">🎯 FSBO{modal.prospect==="fsbo"?" ✓":""}</Btn>
+              <Btn v={modal.prospect==="foreclosure"?"gold":"def"} onClick={function(){ setProspect("foreclosure"); }} title="Add to your Foreclosure watchlist to watch">🏚️ Foreclosure{modal.prospect==="foreclosure"?" ✓":""}</Btn>
               <Btn v={modal.prospect==="lost"?"rose":"def"} onClick={function(){ setProspect("lost"); }} title="Seller signed with another agent — monitor for their listing to expire">🚫 Lost{modal.prospect==="lost"?" ✓":""}</Btn>
               <Btn v="sky" onClick={function(){ syncOneFub(modal); }}>{modal.fubId?"⟳ Update in FUB":"⟳ Push to FUB"}</Btn>
               <Btn v="sky" onClick={function(){ syncOneBrevo(modal); }}>{modal.brevoSynced?"✓ In Brevo":"📨 Add to Brevo"}</Btn>
