@@ -1308,6 +1308,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   var [firstDraft,setFirstDraft] = useState("");
   var [lastDraft,setLastDraft] = useState("");
   var [zipDraft,setZipDraft] = useState("");
+  var [addr2Draft,setAddr2Draft] = useState("");
   var [sendMsg,setSendMsg] = useState("");
   var [fubMsg,setFubMsg] = useState(""); var [fubBusy,setFubBusy] = useState(false);
   var [brevoBusy,setBrevoBusy] = useState(false);
@@ -1395,6 +1396,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
       setPhone2Draft(modal.phone2||"");
       setEmail2Draft(modal.email2||"");
       setAddrDraft(modal.addr||"");
+      setAddr2Draft(modal.addr2||"");
       setFirstDraft(modal.first||"");
       setLastDraft(modal.last||"");
       setZipDraft(modal.zip||"");
@@ -1465,7 +1467,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   }, [focusLead]);
 
   var filtered = leads.filter(function(l){
-    var q = (l.first+" "+l.last+" "+l.phone+" "+l.email+" "+(l.phone2||"")+" "+(l.email2||"")+" "+(l.addr||"")).toLowerCase();
+    var q = (l.first+" "+l.last+" "+l.phone+" "+l.email+" "+(l.phone2||"")+" "+(l.email2||"")+" "+(l.addr||"")+" "+(l.addr2||"")).toLowerCase();
     return (!srch||q.includes(srch.toLowerCase())) && (!fT||l.type===fT) && (!fTp||l.temp===fTp) && (!fS||l.source===fS);
   });
   var TEMPRANK = {hot:0,warm:1,cold:2};
@@ -1491,9 +1493,9 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   }
   function stamp(){ try{ return new Date().toISOString().slice(0,10); }catch(e){ return "backup"; } }
   function exportCSV(){
-    var cols = ["First","Last","Phone","Phone 2","Email","Email 2","Address","Type","Temp","Source","Farm","Buy-box","Ad campaign","Timeline","Nurture","Follow-up","Last contact","Notes"];
+    var cols = ["First","Last","Phone","Phone 2","Email","Email 2","Address","2nd Address","Type","Temp","Source","Farm","Buy-box","Ad campaign","Timeline","Nurture","Follow-up","Last contact","Notes"];
     function esc(v){ v = (v==null?"":String(v)); return '"'+v.replace(/"/g,'""')+'"'; }
-    var rows = leads.map(function(l){ return [l.first,l.last,l.phone,l.phone2,l.email,l.email2,l.addr,l.type,l.temp,l.source,l.farm,l.buyBox,l.adCampaign,l.timeline,l.nurture,l.fu,l.lc,l.notes].map(esc).join(","); });
+    var rows = leads.map(function(l){ return [l.first,l.last,l.phone,l.phone2,l.email,l.email2,l.addr,l.addr2,l.type,l.temp,l.source,l.farm,l.buyBox,l.adCampaign,l.timeline,l.nurture,l.fu,l.lc,l.notes].map(esc).join(","); });
     download("alicia-leads-"+stamp()+".csv", cols.map(esc).join(",")+"\r\n"+rows.join("\r\n"), "text/csv;charset=utf-8");
   }
   function exportJSON(){
@@ -1665,6 +1667,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                 <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Email 2 (optional)" value={email2Draft} onChange={function(e){setEmail2Draft(e.target.value);}} onBlur={function(){saveContact("email2",email2Draft);}} />
                 <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Address" value={addrDraft} onChange={function(e){setAddrDraft(e.target.value);}} onBlur={function(){saveContact("addr",addrDraft);}} />
                 <input style={{...inp,marginBottom:4,fontSize:12,fontFamily:"monospace"}} placeholder="ZIP code (for local market numbers)" value={zipDraft} onChange={function(e){setZipDraft(e.target.value);}} onBlur={function(){saveContact("zip",zipDraft.trim());}} />
+                <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="2nd address — ranch, rental, other property (optional)" value={addr2Draft} onChange={function(e){setAddr2Draft(e.target.value);}} onBlur={function(){saveContact("addr2",addr2Draft);}} />
                 <div style={{fontSize:11,color:C.t3,marginBottom:2}}>🎂 Birthday</div>
                 <input style={{...inp,fontSize:12}} type="date" value={modal.bday||""} onChange={function(e){ saveContact("bday",e.target.value); }} />
               </div>
