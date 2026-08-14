@@ -1662,7 +1662,6 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:14}}>
         <div style={{fontSize:18,fontWeight:700}}>All Leads <span style={{fontSize:13,fontWeight:400,color:C.t3}}>{filtered.length} of {leads.length}</span></div>
         <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-          <Btn onClick={removeDupes} style={{fontSize:11}}>🧹 Remove duplicates</Btn>
           <Btn v="primary" onClick={syncAllBrevo} style={{fontSize:11}}>{brevoBusy?"⟳ Adding…":"📨 Sync all to Brevo"}</Btn>
           <Btn onClick={exportCSV} style={{fontSize:11}}>⬇ CSV</Btn>
           <Btn onClick={exportJSON} style={{fontSize:11}}>⬇ Backup</Btn>
