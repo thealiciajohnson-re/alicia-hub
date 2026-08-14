@@ -902,8 +902,8 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   // Once you tap ✓ Contacted they move into your regular watched-Expired list, alongside ones you added by hand.
   var expiredNew = (leads||[]).filter(function(l){ return l.prospect==="expired" && l.mlNum && !l.contacted; });
   var expired = (leads||[]).filter(function(l){ return l.prospect==="expired" && !(l.mlNum && !l.contacted); });
-  var foreNew = (leads||[]).filter(function(l){ return l.prospect==="foreclosure" && l.radarId && !l.contacted; });
-  var foreWork = (leads||[]).filter(function(l){ return l.prospect==="foreclosure" && !(l.radarId && !l.contacted); });
+  var foreNew = (leads||[]).filter(function(l){ return l.prospect==="foreclosure" && !l.contacted; });
+  var foreWork = (leads||[]).filter(function(l){ return l.prospect==="foreclosure" && l.contacted; });
   var fsbo = (leads||[]).filter(function(l){ return l.prospect==="fsbo"; });
   var lost = (leads||[]).filter(function(l){ return l.prospect==="lost"; }).sort(function(a,b){ return (a.listingExpires||"9999-99")<(b.listingExpires||"9999-99")?-1:1; });
   function open(l){ if(setFocusLead) setFocusLead(l.id); setTab("leads"); }
@@ -911,7 +911,7 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   function markContacted(l){ if(setLeads) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,contacted:true,lc:toDay(),log:[...(x.log||[]),toDay()+" — Cold-called (moved to watching)"]}:x; }); }); }
   function del(l){ if(!(typeof window!=="undefined"&&window.confirm)||window.confirm("Delete this lead as a dead lead? This can't be undone.")){ if(dismissLead) dismissLead(l); if(setLeads) setLeads(function(p){ return p.filter(function(x){ return x.id!==l.id; }); }); } }
   function row(l){
-    var isNew = (l.mlNum || l.radarId) && !l.contacted;
+    var isNew = !l.contacted && (l.mlNum || l.radarId || l.prospect==="foreclosure");
     return (
       <div key={l.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid "+C.br}}>
         <div style={{flex:1,cursor:"pointer"}} onClick={function(){ open(l); }}>
@@ -1482,9 +1482,9 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   }, [focusLead]);
 
   var filtered = leads.filter(function(l){
-    // Hide auto-captured Expired/Foreclosure prospects from the main list until they're worked
-    // (tap ✓ Contacted or → Nurture). They live in the Watchlist tab until then.
-    if ((l.prospect==="expired"||l.prospect==="foreclosure") && (l.mlNum||l.radarId) && !l.contacted) return false;
+    // Hide un-worked prospecting properties from the main list until you work them (✓ Contacted or → Nurture).
+    // All foreclosure/auction leads are auto-captured; expireds are auto only when they carry an MLS number.
+    if (!l.contacted && (l.prospect==="foreclosure" || (l.prospect==="expired" && (l.mlNum||l.radarId)))) return false;
     var q = (l.first+" "+l.last+" "+l.phone+" "+l.email+" "+(l.phone2||"")+" "+(l.email2||"")+" "+(l.addr||"")+" "+(l.addr2||"")).toLowerCase();
     return (!srch||q.includes(srch.toLowerCase())) && (!fT||l.type===fT) && (!fTp||l.temp===fTp) && (!fS||l.source===fS);
   });
@@ -1599,8 +1599,23 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   function doText(l){
     var ph = (l.phone||"").replace(/[^0-9+]/g,"");
     if (!ph){ setSendMsg("No phone on file — add one above first."); return; }
-    window.location.href = "sms:"+ph+"?&body="+encodeURIComponent(curDraft(l));
+    window.location.href = "sms:"+ph+"?body="+encodeURIComponent(curDraft(l));
     logContact(l,"text opened"); setSendMsg("Opening Messages…");
+  }
+  // Short, SMS-appropriate opener. Avoids using an address as a first name (auto-captured prospects).
+  function smsBody(l){
+    var n = (l.first && !/^\d/.test(l.first) && !/·\s*(foreclosure|expired)/i.test(l.last||"")) ? l.first : "";
+    return "Hi "+(n?n+", ":"")+"this is Alicia Johnson with Excellerate Real Estate. ";
+  }
+  // Text via Google Voice (desktop): copy the message + open Google Voice, then paste into a new text.
+  function gvText(l){
+    var ph = (l.phone||"").replace(/[^0-9]/g,"");
+    if (!ph){ setSendMsg("No phone on file — add one above first."); return; }
+    var body = smsBody(l);
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(body).then(function(){},function(){}); }
+    window.open("https://voice.google.com/u/0/messages","_blank");
+    logContact(l,"Google Voice text");
+    setSendMsg("📋 Message copied. In Google Voice: click Send new message → enter "+ph+" → paste (⌘V) → send.");
   }
   function doCopy(l){
     var body = curDraft(l);
@@ -1813,6 +1828,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
             </div>}
             <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:8}}>
               <Btn v="gold" onClick={function(){ setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,lc:toDay(),log:[...(l.log||[]),toDay()+" — contact logged"]}:l; }); }); setModal(function(m){ return {...m,lc:toDay()}; }); }}>Log contact</Btn>
+              {(modal.phone||"").trim() && <Btn v="sky" onClick={function(){ gvText(modal); }} title="Copy a text opener + open Google Voice to send">☎️ Text (Google Voice)</Btn>}
               <Btn v="sky" onClick={function(){ addToPipeline(); }}>➕ Add to Pipeline</Btn>
               <Btn v={modal.prospect==="expired"?"gold":"def"} onClick={function(){ setProspect("expired"); }} title="Add to your Expired listings watchlist">🎯 Expired{modal.prospect==="expired"?" ✓":""}</Btn>
               <Btn v={modal.prospect==="fsbo"?"gold":"def"} onClick={function(){ setProspect("fsbo"); }} title="Add to your FSBO watchlist">🎯 FSBO{modal.prospect==="fsbo"?" ✓":""}</Btn>
