@@ -63,12 +63,17 @@ async function sset(k,v){
         // NEVER seen its id — an id we've seen but no longer hold was deleted by the user, so we let it go.
         if (k === SK.leads && Array.isArray(v)) {
           const res0 = await supa.from("hub_state").select("value").eq("user_id",_session.user.id).eq("key",k).maybeSingle();
-          const dbLeads = (res0 && res0.data && Array.isArray(res0.data.value)) ? res0.data.value : [];
-          const have = {}; v.forEach(function(l){ if(l&&l.id!=null) have[String(l.id)]=1; });
-          const extras = dbLeads.filter(function(l){ return l && l.id!=null && !have[String(l.id)] && !_seenLeadIds[String(l.id)]; });
-          if (extras.length) { toSave = extras.concat(v); _cache[k] = toSave; if (typeof window!=="undefined" && window.__mergeLeads) window.__mergeLeads(extras); }
+          // If we can't reliably read the current DB leads, DO NOT overwrite — skip this save and let the
+          // next change retry. Overwriting on a read hiccup wipes server-added leads (expireds, quiz, etc.).
+          if (res0 && res0.error) { console.error("leads merge read failed — skipping save to protect server-added leads", res0.error); return; }
+          if (res0 && res0.data && Array.isArray(res0.data.value)) {
+            const dbLeads = res0.data.value;
+            const have = {}; v.forEach(function(l){ if(l&&l.id!=null) have[String(l.id)]=1; });
+            const extras = dbLeads.filter(function(l){ return l && l.id!=null && !have[String(l.id)] && !_seenLeadIds[String(l.id)]; });
+            if (extras.length) { toSave = extras.concat(v); _cache[k] = toSave; _markSeen(extras); if (typeof window!=="undefined" && window.__mergeLeads) window.__mergeLeads(extras); }
+          }
         }
-      } catch(e){ console.error("leads merge check failed, saving as-is", e); toSave = v; }
+      } catch(e){ console.error("leads merge check threw — skipping save to protect server-added leads", e); if (k===SK.leads) return; toSave = v; }
       supa.from("hub_state").upsert(
         { user_id:_session.user.id, key:k, value:toSave, updated_at:new Date().toISOString() },
         { onConflict:"user_id,key" }
