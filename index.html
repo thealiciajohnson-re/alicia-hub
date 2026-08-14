@@ -897,6 +897,8 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   // Once you tap ✓ Contacted they move into your regular watched-Expired list, alongside ones you added by hand.
   var expiredNew = (leads||[]).filter(function(l){ return l.prospect==="expired" && l.mlNum && !l.contacted; });
   var expired = (leads||[]).filter(function(l){ return l.prospect==="expired" && !(l.mlNum && !l.contacted); });
+  var foreNew = (leads||[]).filter(function(l){ return l.prospect==="foreclosure" && l.radarId && !l.contacted; });
+  var foreWork = (leads||[]).filter(function(l){ return l.prospect==="foreclosure" && !(l.radarId && !l.contacted); });
   var fsbo = (leads||[]).filter(function(l){ return l.prospect==="fsbo"; });
   var lost = (leads||[]).filter(function(l){ return l.prospect==="lost"; }).sort(function(a,b){ return (a.listingExpires||"9999-99")<(b.listingExpires||"9999-99")?-1:1; });
   function open(l){ if(setFocusLead) setFocusLead(l.id); setTab("leads"); }
@@ -904,7 +906,7 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   function markContacted(l){ if(setLeads) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,contacted:true,lc:toDay(),log:[...(x.log||[]),toDay()+" — Cold-called (moved to watching)"]}:x; }); }); }
   function del(l){ if(!(typeof window!=="undefined"&&window.confirm)||window.confirm("Delete this lead as a dead lead? This can't be undone.")){ if(dismissLead) dismissLead(l); if(setLeads) setLeads(function(p){ return p.filter(function(x){ return x.id!==l.id; }); }); } }
   function row(l){
-    var isNew = l.mlNum && !l.contacted;
+    var isNew = (l.mlNum || l.radarId) && !l.contacted;
     return (
       <div key={l.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid "+C.br}}>
         <div style={{flex:1,cursor:"pointer"}} onClick={function(){ open(l); }}>
@@ -937,7 +939,7 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   }
   return (
     <div>
-      <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>🎯 Expired / FSBO / Lost Watchlist</div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>🎯 Expired / Foreclosure / FSBO / Lost Watchlist</div>
       <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:680}}>Homeowners worth prospecting. Add anyone from their lead card: <b>🎯 Expired</b> (didn't sell), <b>🎯 FSBO</b> (for sale by owner), or <b>🚫 Lost</b> (signed with another agent — watch for their listing to expire, then swoop back in).</div>
       <Card title={"📥 New Expired — Cold Call (" + expiredNew.length + ")"}>
         <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Fresh expired listings auto-pulled from your MLS emails each morning — homes that didn't sell. Look up the owner and cold call. Tap <b>✓ Contacted</b> once you've called and it moves to your watched list below.</div>
@@ -946,6 +948,14 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
       <Card title={"⏳ Expired Listings — Watching (" + expired.length + ")"}>
         <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Expireds you've already contacted or added by hand — the ones you're actively working.</div>
         {expired.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — cold-call a new expired above (✓ Contacted), or tap 🎯 Expired on any lead.</div> : expired.map(row)}
+      </Card>
+      <Card title={"🏚️ New Foreclosures — Cold Call (" + foreNew.length + ")"}>
+        <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Fresh foreclosure & pre-foreclosure properties auto-pulled from your PropertyRadar alert emails. You only get the address — <b>open each one to add the owner's name & phone</b>, then cold call. Tap <b>✓ Contacted</b> once you've reached out.</div>
+        {foreNew.length===0 ? <div style={{color:C.t3,fontSize:13}}>None right now — new foreclosures from your PropertyRadar email land here automatically.</div> : foreNew.map(row)}
+      </Card>
+      <Card title={"🏚️ Foreclosures — Working (" + foreWork.length + ")"}>
+        <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Foreclosures you've already contacted or added by hand.</div>
+        {foreWork.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — cold-call a new foreclosure above (✓ Contacted).</div> : foreWork.map(row)}
       </Card>
       <Card title={"🏷️ For Sale By Owner (" + fsbo.length + ")"}>
         {fsbo.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — open a lead and tap 🎯 FSBO to add them here.</div> : fsbo.map(row)}
