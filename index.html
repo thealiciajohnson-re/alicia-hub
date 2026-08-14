@@ -1602,10 +1602,21 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     window.location.href = "sms:"+ph+"?body="+encodeURIComponent(curDraft(l));
     logContact(l,"text opened"); setSendMsg("Opening Messages…");
   }
-  // Short, SMS-appropriate opener. Avoids using an address as a first name (auto-captured prospects).
+  // Short, SMS-appropriate opener, tailored to the lead's type/prospect.
+  // Avoids using an address as a first name (auto-captured prospects have the address as their name).
   function smsBody(l){
-    var n = (l.first && !/^\d/.test(l.first) && !/·\s*(foreclosure|expired)/i.test(l.last||"")) ? l.first : "";
-    return "Hi "+(n?n+", ":"")+"this is Alicia Johnson with Excellerate Real Estate. ";
+    var real = (l.first && !/^\d/.test(l.first) && !/·\s*(foreclosure|expired|divorce|auction|pre-foreclosure)/i.test(l.last||""));
+    var hi = "Hi "+(real ? l.first+", " : "");
+    var p = l.prospect, t = l.type;
+    if (p==="expired")     return hi+"this is Alicia Johnson with Excellerate Real Estate. I saw your home was listed and didn't sell — I have a couple ideas on what I'd do differently. Open to a quick chat?";
+    if (p==="foreclosure") return hi+"this is Alicia Johnson with Excellerate Real Estate. I help local homeowners weigh their options and may be able to help with yours. Would it be okay to talk for a minute?";
+    if (p==="fsbo")        return hi+"this is Alicia Johnson with Excellerate Real Estate. I saw you're selling on your own — if you'd ever want a hand or a quick second opinion, no strings, I'm glad to help.";
+    if (p==="lost")        return hi+"Alicia Johnson with Excellerate Real Estate checking in. If your listing situation ever changes, I'd love the chance to help you get it sold.";
+    if (t==="closed")      return hi+"Alicia Johnson here — just checking in! I hope you're loving the home. If you ever need anything, or know someone looking to buy or sell, I'm always here.";
+    if (t==="seller")      return hi+"this is Alicia Johnson with Excellerate Real Estate. If you're thinking about selling, I'm happy to share what your home could sell for right now — would that be helpful?";
+    if (t==="buyer")       return hi+"this is Alicia Johnson with Excellerate Real Estate. I'd love to help you find the right home — are you still looking, and what area are you focused on?";
+    if (t==="both")        return hi+"this is Alicia Johnson with Excellerate Real Estate. Whether you're looking to buy, sell, or both, I'd be glad to help — what's on your mind right now?";
+    return hi+"this is Alicia Johnson with Excellerate Real Estate. ";
   }
   // Text via Google Voice (desktop): copy the message + open Google Voice, then paste into a new text.
   function gvText(l){
