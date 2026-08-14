@@ -87,6 +87,7 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6
 const toDay = () => new Date().toISOString().split("T")[0];
 const fmtMoney = n => n ? "$" + Number(n).toLocaleString() : "—";
 const fmtDate = d => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}) : "—";
+const fmtTime = t => { if(!t) return ""; var p=String(t).split(":"); var h=+p[0], m=p[1]||"00"; var ap=h>=12?"PM":"AM"; h=h%12||12; return h+":"+m+" "+ap; };
 
 const AGENT = {
   name: "Alicia Johnson",
@@ -1433,6 +1434,15 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,[field]:val}:l; }); });
     setModal(function(m){ return {...m,[field]:val}; });
   }
+  // Save the lead's appointment (date+time) as a reminder so it shows in Reminders & on the calendar.
+  function saveAppt(l){
+    if(!l.apptDate){ setSendMsg("Pick an appointment date first."); return; }
+    if(setRems) setRems(function(p){
+      var others = p.filter(function(r){ return !(r.leadId===l.id && r.type==="appt"); });   // replace any prior appt for this lead
+      return [...others,{id:uid(),title:"Appointment — "+l.first+" "+l.last,note:(l.addr||""),date:l.apptDate,time:l.apptTime||"09:00",type:"appt",done:false,leadId:l.id}];
+    });
+    setSendMsg("📅 Appointment saved to Reminders — "+fmtDate(l.apptDate)+(l.apptTime?" at "+fmtTime(l.apptTime):"")+".");
+  }
   // Clear any recurring (weekly/bi-weekly/monthly) reminder attached to this lead.
   function clearRecurring(){
     if(!modal) return;
@@ -1749,7 +1759,22 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                 <div style={{fontSize:12,color:C.t2,marginTop:4}}>Timeline: {modal.timeline}</div>
                 <div style={{fontSize:12,color:C.t2}}>Nurture: {NLBL[modal.nurture]||modal.nurture}</div>
                 <div style={{fontSize:12,color:C.t2}}>Follow-up: {fmtDate(modal.fu)}</div>
-                <div style={{fontSize:12,color:C.t2}}>Last contact: {modal.lc||"Never"}</div>
+                <div style={{fontSize:12,color:C.t2,display:"flex",alignItems:"center",gap:6,marginTop:2}}>
+                  <span>Last contact:</span>
+                  <input type="date" style={{...inp,width:140,fontSize:11,padding:"3px 6px"}} value={modal.lc||""} onChange={function(e){ saveContact("lc", e.target.value); }} />
+                </div>
+                <div style={{marginTop:8,padding:"9px 11px",background:C.aL,border:"1px solid "+C.aB,borderRadius:7}}>
+                  <div style={{fontSize:11,fontWeight:600,color:C.ac,marginBottom:5}}>📅 Appointment</div>
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+                    <input type="date" style={{...inp,width:145,fontSize:11,padding:"4px 6px"}} value={modal.apptDate||""} onChange={function(e){ saveContact("apptDate", e.target.value); }} />
+                    <input type="time" style={{...inp,width:110,fontSize:11,padding:"4px 6px"}} value={modal.apptTime||""} onChange={function(e){ saveContact("apptTime", e.target.value); }} />
+                  </div>
+                  {modal.apptDate && <div style={{fontSize:11,color:C.ac,marginTop:6,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <span>✓ {fmtDate(modal.apptDate)}{modal.apptTime?" at "+fmtTime(modal.apptTime):""}</span>
+                    <Btn style={{fontSize:10,padding:"2px 8px"}} onClick={function(){ saveAppt(modal); }}>📌 Add to Reminders</Btn>
+                    <Btn v="rose" style={{fontSize:10,padding:"2px 8px"}} onClick={function(){ saveContact("apptDate",""); saveContact("apptTime",""); }}>Clear</Btn>
+                  </div>}
+                </div>
               </div>
             </Row>
             <div style={{margin:"8px 0"}}>
