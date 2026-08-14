@@ -893,13 +893,18 @@ function PanelRoadmap({rems,setRems,setTab}) {
 
 /* ── EXPIRED / FSBO WATCHLIST ────────────────────────────────── */
 function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
-  var expired = (leads||[]).filter(function(l){ return l.prospect==="expired"; });
+  // Auto-captured MLS expireds (carry an mlNum) start in their own "new — cold call" inbox.
+  // Once you tap ✓ Contacted they move into your regular watched-Expired list, alongside ones you added by hand.
+  var expiredNew = (leads||[]).filter(function(l){ return l.prospect==="expired" && l.mlNum && !l.contacted; });
+  var expired = (leads||[]).filter(function(l){ return l.prospect==="expired" && !(l.mlNum && !l.contacted); });
   var fsbo = (leads||[]).filter(function(l){ return l.prospect==="fsbo"; });
   var lost = (leads||[]).filter(function(l){ return l.prospect==="lost"; }).sort(function(a,b){ return (a.listingExpires||"9999-99")<(b.listingExpires||"9999-99")?-1:1; });
   function open(l){ if(setFocusLead) setFocusLead(l.id); setTab("leads"); }
   function toNurture(l){ if(setLeads) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,prospect:"",nurture:"monthly",temp:"warm",log:[...(x.log||[]),toDay()+" — Converted from Expired to nurture"]}:x; }); }); }
+  function markContacted(l){ if(setLeads) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,contacted:true,lc:toDay(),log:[...(x.log||[]),toDay()+" — Cold-called (moved to watching)"]}:x; }); }); }
   function del(l){ if(!(typeof window!=="undefined"&&window.confirm)||window.confirm("Delete this lead as a dead lead? This can't be undone.")){ if(dismissLead) dismissLead(l); if(setLeads) setLeads(function(p){ return p.filter(function(x){ return x.id!==l.id; }); }); } }
   function row(l){
+    var isNew = l.mlNum && !l.contacted;
     return (
       <div key={l.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid "+C.br}}>
         <div style={{flex:1,cursor:"pointer"}} onClick={function(){ open(l); }}>
@@ -907,6 +912,7 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
           <div style={{fontSize:11,color:C.t3}}>{l.addr||"—"}{l.phone?" · "+l.phone:""}{l.source?" · "+l.source:""}{l.lc?" · last contact "+fmtDate(l.lc):" · not contacted yet"}</div>
         </div>
         <Tag t={l.temp==="hot"?"hot":l.temp==="warm"?"warm":"new"}>{l.temp}</Tag>
+        {isNew && <Btn v="primary" style={{fontSize:10,padding:"3px 8px"}} title="Mark cold-called — moves it to your watched Expired list" onClick={function(e){ e.stopPropagation(); markContacted(l); }}>✓ Contacted</Btn>}
         <Btn style={{fontSize:10,padding:"3px 8px"}} title="Convert to a nurtured lead (monthly touch) and remove from this watchlist" onClick={function(e){ e.stopPropagation(); toNurture(l); }}>→ Nurture</Btn>
         <Btn v="rose" style={{fontSize:10,padding:"3px 8px"}} title="Delete as a dead lead" onClick={function(e){ e.stopPropagation(); del(l); }}>🗑</Btn>
         <span style={{fontSize:11,color:C.ac,cursor:"pointer"}} onClick={function(){ open(l); }}>Open →</span>
@@ -933,8 +939,13 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>🎯 Expired / FSBO / Lost Watchlist</div>
       <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:680}}>Homeowners worth prospecting. Add anyone from their lead card: <b>🎯 Expired</b> (didn't sell), <b>🎯 FSBO</b> (for sale by owner), or <b>🚫 Lost</b> (signed with another agent — watch for their listing to expire, then swoop back in).</div>
-      <Card title={"⏳ Expired Listings (" + expired.length + ")"}>
-        {expired.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — open a lead and tap 🎯 Expired to add them here.</div> : expired.map(row)}
+      <Card title={"📥 New Expired — Cold Call (" + expiredNew.length + ")"}>
+        <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Fresh expired listings auto-pulled from your MLS emails each morning — homes that didn't sell. Look up the owner and cold call. Tap <b>✓ Contacted</b> once you've called and it moves to your watched list below.</div>
+        {expiredNew.length===0 ? <div style={{color:C.t3,fontSize:13}}>None right now — new expireds from your MLS email land here automatically.</div> : expiredNew.map(row)}
+      </Card>
+      <Card title={"⏳ Expired Listings — Watching (" + expired.length + ")"}>
+        <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Expireds you've already contacted or added by hand — the ones you're actively working.</div>
+        {expired.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — cold-call a new expired above (✓ Contacted), or tap 🎯 Expired on any lead.</div> : expired.map(row)}
       </Card>
       <Card title={"🏷️ For Sale By Owner (" + fsbo.length + ")"}>
         {fsbo.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — open a lead and tap 🎯 FSBO to add them here.</div> : fsbo.map(row)}
