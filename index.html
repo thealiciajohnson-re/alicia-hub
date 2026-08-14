@@ -1663,9 +1663,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
         <div style={{fontSize:18,fontWeight:700}}>All Leads <span style={{fontSize:13,fontWeight:400,color:C.t3}}>{filtered.length} of {leads.length}</span></div>
         <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
           <Btn onClick={removeDupes} style={{fontSize:11}}>🧹 Remove duplicates</Btn>
-          <Btn v="sky" onClick={syncAllFub} style={{fontSize:11}}>{fubBusy?"⟳ Syncing…":"⟳ Sync all to FUB"}</Btn>
           <Btn v="primary" onClick={syncAllBrevo} style={{fontSize:11}}>{brevoBusy?"⟳ Adding…":"📨 Sync all to Brevo"}</Btn>
-          <Btn v="sky" onClick={function(){ setFubMsg("Checking Follow Up Boss for new leads…"); if(pullFromFub) pullFromFub().then(function(){ setFubMsg("✓ Checked FUB — any new leads were added."); }); }} style={{fontSize:11}}>⟳ Check FUB for new</Btn>
           <Btn onClick={exportCSV} style={{fontSize:11}}>⬇ CSV</Btn>
           <Btn onClick={exportJSON} style={{fontSize:11}}>⬇ Backup</Btn>
         </div>
@@ -1880,7 +1878,6 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
               <Btn v={modal.prospect==="fsbo"?"gold":"def"} onClick={function(){ setProspect("fsbo"); }} title="Add to your FSBO watchlist">🎯 FSBO{modal.prospect==="fsbo"?" ✓":""}</Btn>
               <Btn v={modal.prospect==="foreclosure"?"gold":"def"} onClick={function(){ setProspect("foreclosure"); }} title="Add to your Foreclosure watchlist to watch">🏚️ Foreclosure{modal.prospect==="foreclosure"?" ✓":""}</Btn>
               <Btn v={modal.prospect==="lost"?"rose":"def"} onClick={function(){ setProspect("lost"); }} title="Seller signed with another agent — monitor for their listing to expire">🚫 Lost{modal.prospect==="lost"?" ✓":""}</Btn>
-              <Btn v="sky" onClick={function(){ syncOneFub(modal); }}>{modal.fubId?"⟳ Update in FUB":"⟳ Push to FUB"}</Btn>
               <Btn v="sky" onClick={function(){ syncOneBrevo(modal); }}>{modal.brevoSynced?"✓ In Brevo":"📨 Add to Brevo"}</Btn>
               {confirmDelete
                 ? <span style={{display:"inline-flex",alignItems:"center",gap:5}}>
