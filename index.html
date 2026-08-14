@@ -1477,6 +1477,9 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   }, [focusLead]);
 
   var filtered = leads.filter(function(l){
+    // Hide auto-captured Expired/Foreclosure prospects from the main list until they're worked
+    // (tap ✓ Contacted or → Nurture). They live in the Watchlist tab until then.
+    if ((l.prospect==="expired"||l.prospect==="foreclosure") && (l.mlNum||l.radarId) && !l.contacted) return false;
     var q = (l.first+" "+l.last+" "+l.phone+" "+l.email+" "+(l.phone2||"")+" "+(l.email2||"")+" "+(l.addr||"")+" "+(l.addr2||"")).toLowerCase();
     return (!srch||q.includes(srch.toLowerCase())) && (!fT||l.type===fT) && (!fTp||l.temp===fTp) && (!fS||l.source===fS);
   });
