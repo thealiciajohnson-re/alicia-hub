@@ -196,7 +196,9 @@ function leadsMatch(a,b){
 // Collapse duplicates, keeping the first (existing) record and backfilling missing fields from the dupes.
 function dedupeLeads(list){
   var out=[];
-  (list||[]).forEach(function(l){
+  // Drop any null / non-object entries first, so a single bad element can never crash the load
+  // (that was the "stuck on Loading" bug). This runs on every load, so the app self-heals.
+  (list||[]).filter(function(x){ return x && typeof x==="object" && !Array.isArray(x); }).forEach(function(l){
     var m=-1;
     for(var i=0;i<out.length;i++){ if(leadsMatch(out[i],l)){ m=i; break; } }
     if(m<0){ out.push(l); return; }
