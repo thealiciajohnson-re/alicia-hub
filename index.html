@@ -1024,6 +1024,11 @@ function TrendChart({title, points, color, fill}) {
 }
 function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMarket}) {
   var [socEdit,setSocEdit] = useState(false);
+  var [siteStats,setSiteStats] = useState(null);
+  useEffect(function(){
+    fetch("https://mdlonovzxkpcahopwvac.supabase.co/functions/v1/site-visits")
+      .then(function(r){ return r.json(); }).then(function(d){ if(d&&d.ok) setSiteStats(d); }).catch(function(){});
+  }, []);
   var soc = (market && market.social) || {};
   function setSoc(plat, field, val){
     if(!setMarket) return;
@@ -1160,6 +1165,36 @@ function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMar
             </div>
           );
         })()}
+        {/* Website visitors — live count from thealiciajohnsonhomes.com */}
+        {(function(){ var v = siteStats; return (
+          <div style={{marginTop:10}}>
+            <Card title="🌐 Website Visitors — thealiciajohnsonhomes.com">
+              {!v ? <div style={{color:C.t3,fontSize:12.5}}>Loading visitor stats… (counting starts from today — give it a day to fill in).</div> : (
+                <div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:10}}>
+                    {[["Today",v.today],["7 days",v.week],["30 days",v.month],["All-time",v.total]].map(function(x){
+                      return <div key={x[0]} style={{background:C.aL,border:"1px solid "+C.aB,borderRadius:8,padding:"9px 10px",textAlign:"center"}}>
+                        <div style={{fontSize:20,fontWeight:800,color:C.ac,fontFamily:"monospace"}}>{(x[1]||0).toLocaleString()}</div>
+                        <div style={{fontSize:10.5,color:C.t3,marginTop:2}}>{x[0]}</div></div>;
+                    })}
+                  </div>
+                  <div style={{fontSize:11,color:C.t3,marginBottom:8}}>👤 {(v.unique||0).toLocaleString()} unique visitors all-time · {(v.uniqueToday||0)} today</div>
+                  {v.series && (function(){ var mx=v.series.reduce(function(a,s){ return Math.max(a,s.views); },1); return (
+                    <div style={{display:"flex",alignItems:"flex-end",gap:4,height:46,marginBottom:10}}>
+                      {v.series.map(function(s,i){ return <div key={i} style={{flex:1,textAlign:"center"}}>
+                        <div style={{background:C.ac,borderRadius:3,height:Math.max(3,Math.round((s.views/mx)*34))+"px",opacity:0.85}} title={s.views+" views"} />
+                        <div style={{fontSize:9,color:C.t3,marginTop:2}}>{s.day}</div></div>; })}
+                    </div>); })()}
+                  {v.topPages && v.topPages.length>0 && <div>
+                    <div style={{fontSize:11,fontWeight:600,color:C.t2,marginBottom:4}}>Top pages (30 days)</div>
+                    {v.topPages.map(function(p){ return <div key={p.path} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"2px 0",color:C.t2}}><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:230}}>{p.path}</span><b>{p.views}</b></div>; })}
+                  </div>}
+                  <div style={{fontSize:10,color:C.t3,marginTop:8}}>Live count from your site. Deeper data (traffic sources, geography) lives in Google Analytics.</div>
+                </div>
+              )}
+            </Card>
+          </div>
+        ); })()}
       </div>
     </div>
   );
