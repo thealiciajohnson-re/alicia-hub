@@ -1185,11 +1185,21 @@ function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMar
                         <div style={{background:C.ac,borderRadius:3,height:Math.max(3,Math.round((s.views/mx)*34))+"px",opacity:0.85}} title={s.views+" views"} />
                         <div style={{fontSize:9,color:C.t3,marginTop:2}}>{s.day}</div></div>; })}
                     </div>); })()}
-                  {v.topPages && v.topPages.length>0 && <div>
-                    <div style={{fontSize:11,fontWeight:600,color:C.t2,marginBottom:4}}>Top pages (30 days)</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:4}}>
+                    <div>
+                      <div style={{fontSize:11,fontWeight:600,color:C.t2,marginBottom:4}}>🔗 Where they came from (30d)</div>
+                      {(v.topSources&&v.topSources.length>0) ? v.topSources.map(function(x){ return <div key={x.source} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"2px 0",color:C.t2}}><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.source}</span><b>{x.visits}</b></div>; }) : <div style={{fontSize:11.5,color:C.t3}}>No source data yet.</div>}
+                    </div>
+                    <div>
+                      <div style={{fontSize:11,fontWeight:600,color:C.t2,marginBottom:4}}>👆 Most-clicked (30d)</div>
+                      {(v.topClicks&&v.topClicks.length>0) ? v.topClicks.map(function(x,i){ return <div key={i} style={{display:"flex",justifyContent:"space-between",gap:6,fontSize:12,padding:"2px 0",color:C.t2}}><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={x.label}>{x.label}</span><b>{x.count}</b></div>; }) : <div style={{fontSize:11.5,color:C.t3}}>No clicks tracked yet.</div>}
+                    </div>
+                  </div>
+                  {v.topPages && v.topPages.length>0 && <div style={{marginTop:10}}>
+                    <div style={{fontSize:11,fontWeight:600,color:C.t2,marginBottom:4}}>📄 Top pages (30 days)</div>
                     {v.topPages.map(function(p){ return <div key={p.path} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"2px 0",color:C.t2}}><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:230}}>{p.path}</span><b>{p.views}</b></div>; })}
                   </div>}
-                  <div style={{fontSize:10,color:C.t3,marginTop:8}}>Live count from your site. Deeper data (traffic sources, geography) lives in Google Analytics.</div>
+                  <div style={{fontSize:10,color:C.t3,marginTop:8}}>Live from your site. For exact Google <b>search terms</b>, set up Google Search Console.</div>
                 </div>
               )}
             </Card>
