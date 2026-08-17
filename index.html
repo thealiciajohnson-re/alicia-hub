@@ -714,7 +714,7 @@ function App() {
 
   const NAV = [
     {s:"Daily",items:[{id:"dashboard",l:"Dashboard"},{id:"calendar",l:"Today"},{id:"rems",l:"Reminders",b:pendRem}]},
-    {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired/FSBO/Lost",b:watchN}]},
+    {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.filter(function(l){ return ["expired","foreclosure","fsbo","lost"].indexOf(l.prospect)<0; }).length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired/FSBO/Lost",b:watchN}]},
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
@@ -1501,7 +1501,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   var filtered = leads.filter(function(l){
     // Hide un-worked prospecting properties from the main list until you work them (✓ Contacted or → Nurture).
     // All foreclosure/auction leads are auto-captured; expireds are auto only when they carry an MLS number.
-    if (!l.contacted && ((l.prospect==="foreclosure" && l.listName) || (l.prospect==="expired" && (l.mlNum||l.radarId)))) return false;
+    if (["expired","foreclosure","fsbo","lost"].indexOf(l.prospect)>=0) return false;  // watchlist prospects live in the Watchlist tab, not All Leads
     var q = (l.first+" "+l.last+" "+l.phone+" "+l.email+" "+(l.phone2||"")+" "+(l.email2||"")+" "+(l.addr||"")+" "+(l.addr2||"")).toLowerCase();
     return (!srch||q.includes(srch.toLowerCase())) && (!fT||l.type===fT) && (!fTp||l.temp===fTp) && (!fS||l.source===fS);
   });
@@ -1660,7 +1660,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:14}}>
-        <div style={{fontSize:18,fontWeight:700}}>All Leads <span style={{fontSize:13,fontWeight:400,color:C.t3}}>{filtered.length} of {leads.length}</span></div>
+        <div style={{fontSize:18,fontWeight:700}}>All Leads <span style={{fontSize:13,fontWeight:400,color:C.t3}}>{filtered.length} of {leads.filter(function(l){ return ["expired","foreclosure","fsbo","lost"].indexOf(l.prospect)<0; }).length}</span></div>
         <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
           <Btn v="primary" onClick={syncAllBrevo} style={{fontSize:11}}>{brevoBusy?"⟳ Adding…":"📨 Sync all to Brevo"}</Btn>
           <Btn onClick={exportCSV} style={{fontSize:11}}>⬇ CSV</Btn>
