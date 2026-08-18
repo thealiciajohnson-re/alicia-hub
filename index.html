@@ -1025,9 +1025,12 @@ function TrendChart({title, points, color, fill}) {
 function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMarket}) {
   var [socEdit,setSocEdit] = useState(false);
   var [siteStats,setSiteStats] = useState(null);
+  var [gsc,setGsc] = useState(null);
   useEffect(function(){
     fetch("https://mdlonovzxkpcahopwvac.supabase.co/functions/v1/site-visits")
       .then(function(r){ return r.json(); }).then(function(d){ if(d&&d.ok) setSiteStats(d); }).catch(function(){});
+    fetch("https://mdlonovzxkpcahopwvac.supabase.co/functions/v1/gsc-queries")
+      .then(function(r){ return r.json(); }).then(function(d){ if(d&&d.ok) setGsc(d); }).catch(function(){});
   }, []);
   var soc = (market && market.social) || {};
   function setSoc(plat, field, val){
@@ -1202,6 +1205,27 @@ function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMar
                   <div style={{fontSize:10,color:C.t3,marginTop:8}}>Live from your site. For exact Google <b>search terms</b>, set up Google Search Console.</div>
                 </div>
               )}
+            </Card>
+          </div>
+        ); })()}
+        {/* Top Google searches — from Search Console */}
+        {(function(){ var q = gsc && gsc.queries; return (
+          <div style={{marginTop:10}}>
+            <Card title="🔍 Top Google Searches — how people find you">
+              {(!gsc) ? <div style={{color:C.t3,fontSize:12.5}}>Connecting to Google Search Console…</div>
+               : (!q || q.length===0) ? <div style={{color:C.t3,fontSize:12.5,lineHeight:1.5}}>✅ Connected to Search Console. No search terms yet — Google needs <b>1–3 days</b> after setup to gather data. Check back soon; the words people Googled to find you will show up here automatically.</div>
+               : (<div style={{overflowX:"auto"}}>
+                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                     <thead><tr>{["Search term","Clicks","Seen","Avg. spot"].map(function(h,i){ return <th key={h} style={{textAlign:i===0?"left":"right",padding:"6px 8px",borderBottom:"1px solid "+C.br,fontSize:10.5,textTransform:"uppercase",letterSpacing:".05em",color:C.t3}}>{h}</th>; })}</tr></thead>
+                     <tbody>{q.slice(0,12).map(function(r,i){ return <tr key={i}>
+                       <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.br,color:C.t2}}>{r.query}</td>
+                       <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.br,textAlign:"right",fontWeight:700,color:C.tx,fontFamily:"monospace"}}>{r.clicks}</td>
+                       <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.br,textAlign:"right",color:C.t3,fontFamily:"monospace"}}>{r.impressions}</td>
+                       <td style={{padding:"6px 8px",borderBottom:"1px solid "+C.br,textAlign:"right",color:C.t3,fontFamily:"monospace"}}>#{r.position}</td>
+                     </tr>; })}</tbody>
+                   </table>
+                   <div style={{fontSize:10,color:C.t3,marginTop:8}}>Last 28 days · <b>Clicks</b> = visits from Google · <b>Seen</b> = times you appeared · <b>Avg. spot</b> = your ranking position.</div>
+                 </div>)}
             </Card>
           </div>
         ); })()}
