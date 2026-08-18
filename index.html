@@ -25,7 +25,7 @@ const { useState, useEffect, useRef } = React;
 
 /* ── Storage ─────────────────────────────────────────────────── */
 const SK = {
-  leads:"hub:leads2", rems:"hub:rems2", deals:"hub:deals2",
+  leads:"hub:leads2", rems:"hub:rems2", deals:"hub:deals2", cmas:"hub:cmas2",
   goals:"hub:goals2", act:"hub:act2", scores:"hub:scores2",
   txs:"hub:txs2", oh:"hub:oh2", seeded:"hub:seeded3", enrolled:"hub:enrolled2", apikey:"hub:apikey2", listings:"hub:listings2", market:"hub:market2", dismissed:"hub:dismiss2", social:"hub:social2"
 };
@@ -573,6 +573,7 @@ function App() {
     median:"$715K", dom:"28", inv:"~840", marketDate:"June 2026", cities:[]
   });
   const [social, setSocial] = useState([]);   // social content calendar (posts across platforms)
+  const [cmas, setCmas] = useState([]);   // saved CMAs (comparative market analyses)
   const [dismissed, setDismissed] = useState([]);   // deleted leads (tombstones) so FUB sync won't re-add them
   const [apiKey, setApiKey] = useState("");
   const [akInput, setAkInput] = useState("");
@@ -584,7 +585,8 @@ function App() {
   useEffect(function() {
     (async function() {
       const seeded = await sget(SK.seeded);
-      const [l,r,d,g,a,sc,tx,ohg,enr,ak,lst,mkt,dis,soc] = await Promise.all([sget(SK.leads),sget(SK.rems),sget(SK.deals),sget(SK.goals),sget(SK.act),sget(SK.scores),sget(SK.txs),sget(SK.oh),sget(SK.enrolled),sget(SK.apikey),sget(SK.listings),sget(SK.market),sget(SK.dismissed),sget(SK.social)]);
+      const [l,r,d,g,a,sc,tx,ohg,enr,ak,lst,mkt,dis,soc,cma] = await Promise.all([sget(SK.leads),sget(SK.rems),sget(SK.deals),sget(SK.goals),sget(SK.act),sget(SK.scores),sget(SK.txs),sget(SK.oh),sget(SK.enrolled),sget(SK.apikey),sget(SK.listings),sget(SK.market),sget(SK.dismissed),sget(SK.social),sget(SK.cmas)]);
+      if (cma) setCmas(cma);
       if (l) { setLeads(dedupeLeads(l)); } else if (!seeded) { setLeads(SEEDS); await sset(SK.leads,SEEDS); await sset(SK.seeded,true); }
       if (r) { setRems(r); } else { setRems(INIT_REMS); await sset(SK.rems,INIT_REMS); }
       if (d) { setDeals(d); } else { setDeals(INIT_DEALS); await sset(SK.deals,INIT_DEALS); }
@@ -658,6 +660,7 @@ function App() {
   useEffect(function(){ if (ready) sset(SK.market,market); }, [market,ready]);
   useEffect(function(){ if (ready) sset(SK.dismissed,dismissed); }, [dismissed,ready]);
   useEffect(function(){ if (ready) sset(SK.social,social); }, [social,ready]);
+  useEffect(function(){ if (ready) sset(SK.cmas,cmas); }, [cmas,ready]);
   function dismissLead(l){ if(!l) return; setDismissed(function(p){ return [...p, {fubId:(l.fubId||null), email:(l.email||"")}]; }); }
   useEffect(function(){ if (ready && apiKey) sset(SK.apikey,apiKey); }, [apiKey,ready]);
 
@@ -719,11 +722,11 @@ function App() {
     {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.filter(function(l){ return ["expired","foreclosure","fsbo","lost"].indexOf(l.prospect)<0; }).length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired/FSBO/Lost",b:watchN}]},
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
-    {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
+    {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"cma",l:"🏷️ CMA / Comps"},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
     {s:"Business",items:[{id:"roadmap",l:"📋 Roadmap"},{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"},{id:"score",l:"Scorecard"}]}
   ];
 
-  const pp = {leads,rems,deals,act,goals,scores,txs,oh,enrolled,listings,setListings,market,setMarket,social,setSocial,setTab,setLeads,setRems,setDeals,setGoals,setAct,setScores,setTxs,setOh,setEnrolled,addLead,focusLead,setFocusLead,pullFromFub,dismissLead};
+  const pp = {leads,rems,deals,act,goals,scores,txs,oh,enrolled,listings,setListings,market,setMarket,social,setSocial,cmas,setCmas,setTab,setLeads,setRems,setDeals,setGoals,setAct,setScores,setTxs,setOh,setEnrolled,addLead,focusLead,setFocusLead,pullFromFub,dismissLead};
 
   return (
     <div style={{fontFamily:"'DM Sans',system-ui,sans-serif",background:C.bg,minHeight:"100vh",fontSize:14,color:C.tx}}>
@@ -777,6 +780,7 @@ function App() {
           {tab==="addlead"   && <PanelAddLead {...pp} />}
           {tab==="pipeline"  && <PanelPipeline {...pp} />}
           {tab==="watch"     && <PanelWatch {...pp} />}
+          {tab==="cma"       && <PanelCMA {...pp} />}
           {tab==="roadmap"   && <PanelRoadmap {...pp} />}
           {tab==="actionplans" && <PanelActionPlans {...pp} />}
           {tab==="nurture"   && <PanelNurture {...pp} />}
@@ -904,6 +908,122 @@ function PanelRoadmap({rems,setRems,setTab}) {
 }
 
 /* ── EXPIRED / FSBO WATCHLIST ────────────────────────────────── */
+/* ── CMA / COMPS ─────────────────────────────────────────────── */
+function PanelCMA({cmas,setCmas}) {
+  function blankComp(){ return {addr:"",beds:"",baths:"",sqft:"",dist:"",price:"",sold:""}; }
+  var BLANK = {id:"",subject:{addr:"",beds:"",baths:"",sqft:"",condition:""},comps:[blankComp(),blankComp(),blankComp()],commission:5,costs:1.5,saved:""};
+  var [c,setC] = useState(BLANK);
+  var [msg,setMsg] = useState("");
+  function num(x){ var n=parseFloat(String(x==null?"":x).replace(/[^0-9.]/g,"")); return isFinite(n)?n:0; }
+  function fmt(n){ return n>0 ? "$"+Math.round(n).toLocaleString() : "—"; }
+  function setSubj(f,v){ setC(function(p){ return {...p,subject:{...p.subject,[f]:v}}; }); }
+  function setComp(i,f,v){ setC(function(p){ var cs=p.comps.slice(); cs[i]={...cs[i],[f]:v}; return {...p,comps:cs}; }); }
+
+  var ppsf = c.comps.map(function(cp){ var s=num(cp.sqft),p=num(cp.price); return (s>0&&p>0)?p/s:0; });
+  var valid = ppsf.filter(function(x){ return x>0; });
+  var avgPpsf = valid.length ? valid.reduce(function(a,b){return a+b;},0)/valid.length : 0;
+  var sp = valid.slice().sort(function(a,b){return a-b;});
+  var medPpsf = sp.length ? (sp.length%2 ? sp[(sp.length-1)/2] : (sp[sp.length/2-1]+sp[sp.length/2])/2) : 0;
+  var prices = c.comps.map(function(cp){ return num(cp.price); }).filter(function(x){ return x>0; });
+  var avgPrice = prices.length ? prices.reduce(function(a,b){return a+b;},0)/prices.length : 0;
+  var subjSqft = num(c.subject.sqft);
+  var suggest = (subjSqft>0 && medPpsf>0) ? subjSqft*medPpsf : 0;
+  var low = suggest*0.97, high = suggest*1.03;
+  var comm = suggest*(num(c.commission)/100), cost = suggest*(num(c.costs)/100);
+  var net = suggest>0 ? suggest - comm - cost : 0;
+
+  function saveCMA(){
+    if(!c.subject.addr.trim()){ setMsg("⚠️ Add the subject property address first."); return; }
+    var rec = {...c,id:c.id||uid(),saved:toDay(),suggest:Math.round(suggest)};
+    setCmas(function(p){ var o=(p||[]).filter(function(x){return x.id!==rec.id;}); return [rec,...o]; });
+    setC(rec); setMsg("✓ Saved — see it under Saved CMAs below. It syncs across your devices.");
+  }
+  function loadCMA(rec){ setC(rec); setMsg("Loaded: "+(rec.subject.addr||"CMA")); }
+  function delCMA(id){ if(typeof window!=="undefined"&&window.confirm&&!window.confirm("Delete this saved CMA?"))return; setCmas(function(p){ return (p||[]).filter(function(x){return x.id!==id;}); }); }
+  function copySummary(){
+    var L=["🏷️ CMA — "+(c.subject.addr||""),
+      "Subject: "+(c.subject.beds||"?")+"bd / "+(c.subject.baths||"?")+"ba · "+(c.subject.sqft||"?")+" sqft"+(c.subject.condition?" · "+c.subject.condition:""),""];
+    c.comps.forEach(function(cp,i){ if(cp.addr) L.push("Comp "+(i+1)+": "+cp.addr+" — "+fmt(num(cp.price))+" · "+(cp.beds||"?")+"/"+(cp.baths||"?")+" · "+(cp.sqft||"?")+" sqft · "+(cp.dist||"?")+" mi · sold "+(cp.sold||"?")+"  ("+(ppsf[i]?"$"+Math.round(ppsf[i])+"/sqft":"—")+")"); });
+    L.push("","Median $/sqft: $"+Math.round(medPpsf)+"  ·  Avg comp price: "+fmt(avgPrice),
+      "Suggested value: "+fmt(suggest)+"   (range "+fmt(low)+" – "+fmt(high)+")",
+      "Est. net to seller: "+fmt(net)+"  (after "+c.commission+"% commission + "+c.costs+"% costs)",
+      "","Prepared by Alicia Johnson · Excellerate Real Estate · DRE #02272644");
+    var txt=L.join("\n");
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function(){ setMsg("✓ Summary copied — paste it into an email, text, or doc."); }, function(){ setMsg("Couldn't copy automatically."); });
+  }
+  var COLS=[["addr","Address",2.4],["beds","Bd",0.5],["baths","Ba",0.5],["sqft","Sq Ft",0.8],["dist","Dist (mi)",0.7],["price","Sold $",1],["sold","Date sold",1]];
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,marginBottom:6}}>
+        <div style={{fontSize:18,fontWeight:700}}>🏷️ CMA / Comparable Market Analysis</div>
+        <div style={{display:"flex",gap:6}}>
+          <Btn onClick={function(){ setC(BLANK); setMsg("Started a new blank CMA."); }} style={{fontSize:11}}>+ New</Btn>
+          <Btn v="primary" onClick={saveCMA} style={{fontSize:11}}>💾 Save</Btn>
+          <Btn onClick={copySummary} style={{fontSize:11}}>📋 Copy summary</Btn>
+        </div>
+      </div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:720}}>Put in the listing address + 3 recent sold comps, and it works out the price-per-sqft and a suggested value range for you. <b>Tip:</b> pull your <b>BAREIS sold comps</b> for the real numbers — this does the math.</div>
+
+      <Card title="Subject property (the home you're pricing)">
+        <input style={{...inp,marginBottom:8}} placeholder="Address — e.g. 250 Maple Ave, Kenwood, CA 95452" value={c.subject.addr} onChange={function(e){ setSubj("addr",e.target.value); }} />
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <input style={{...inp,width:80}} placeholder="Beds" value={c.subject.beds} onChange={function(e){ setSubj("beds",e.target.value); }} />
+          <input style={{...inp,width:80}} placeholder="Baths" value={c.subject.baths} onChange={function(e){ setSubj("baths",e.target.value); }} />
+          <input style={{...inp,width:110}} placeholder="Sq ft" value={c.subject.sqft} onChange={function(e){ setSubj("sqft",e.target.value); }} />
+          <input style={{...inp,flex:1,minWidth:140}} placeholder="Condition (e.g. updated, needs work)" value={c.subject.condition} onChange={function(e){ setSubj("condition",e.target.value); }} />
+        </div>
+      </Card>
+
+      <Card title="Comparable sales (3)">
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:640}}>
+            <thead><tr>{COLS.map(function(col){ return <th key={col[0]} style={{textAlign:"left",fontSize:10.5,textTransform:"uppercase",letterSpacing:".05em",color:C.t3,padding:"4px 6px",fontWeight:600}}>{col[1]}</th>; })}<th style={{textAlign:"right",fontSize:10.5,textTransform:"uppercase",letterSpacing:".05em",color:C.t3,padding:"4px 6px"}}>$/sqft</th></tr></thead>
+            <tbody>{c.comps.map(function(cp,i){ return <tr key={i}>
+              {COLS.map(function(col){ return <td key={col[0]} style={{padding:"3px 4px"}}><input style={{...inp,fontSize:12,padding:"6px 7px",width:"100%"}} placeholder={col[1]} value={cp[col[0]]} onChange={function(e){ setComp(i,col[0],e.target.value); }} /></td>; })}
+              <td style={{padding:"3px 6px",textAlign:"right",fontFamily:"monospace",fontSize:12.5,fontWeight:700,color:ppsf[i]?C.ac:C.t3,whiteSpace:"nowrap"}}>{ppsf[i]?"$"+Math.round(ppsf[i]):"—"}</td>
+            </tr>; })}</tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card title="📊 The numbers">
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:14}}>
+          {[["Median $/sqft",medPpsf>0?"$"+Math.round(medPpsf):"—"],["Average $/sqft",avgPpsf>0?"$"+Math.round(avgPpsf):"—"],["Avg comp price",fmt(avgPrice)]].map(function(x){
+            return <div key={x[0]} style={{background:C.s2,borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:10.5,color:C.t3,textTransform:"uppercase",letterSpacing:".05em"}}>{x[0]}</div><div style={{fontSize:19,fontWeight:800,fontFamily:"monospace",color:C.tx}}>{x[1]}</div></div>;
+          })}
+        </div>
+        <div style={{background:C.aL,border:"1px solid "+C.aB,borderRadius:10,padding:"14px 16px",textAlign:"center",marginBottom:12}}>
+          <div style={{fontSize:11,color:C.ac,textTransform:"uppercase",letterSpacing:".06em",fontWeight:600}}>Suggested value {subjSqft>0?"(subject sqft × median $/sqft)":"— add subject sq ft"}</div>
+          <div style={{fontSize:32,fontWeight:800,color:C.ac,fontFamily:"monospace",margin:"4px 0"}}>{fmt(suggest)}</div>
+          {suggest>0 && <div style={{fontSize:13,color:C.t2}}>Likely range <b>{fmt(low)}</b> – <b>{fmt(high)}</b></div>}
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",fontSize:12.5,color:C.t2}}>
+          <span>Seller net at suggested price:</span>
+          <span>Commission</span><input style={{...inp,width:60,fontSize:12,padding:"4px 6px"}} value={c.commission} onChange={function(e){ setC(function(p){return {...p,commission:e.target.value};}); }} />%
+          <span>Other costs</span><input style={{...inp,width:60,fontSize:12,padding:"4px 6px"}} value={c.costs} onChange={function(e){ setC(function(p){return {...p,costs:e.target.value};}); }} />%
+          <span style={{fontWeight:700,color:C.go,fontSize:14}}>→ Est. net {fmt(net)}</span>
+        </div>
+        <div style={{fontSize:10.5,color:C.t3,marginTop:8}}>Rough estimate — excludes mortgage payoff, concessions, and prorations. Anchor the final CMA on your BAREIS sold comps.</div>
+      </Card>
+      {msg && <div style={{fontSize:12.5,color:C.ac,marginTop:4,marginBottom:8}}>{msg}</div>}
+
+      <Card title={"💾 Saved CMAs (" + (cmas||[]).length + ")"}>
+        {(!cmas||cmas.length===0) ? <div style={{color:C.t3,fontSize:13}}>None saved yet. Fill one in above and tap 💾 Save — it'll appear here and sync across your devices.</div> :
+          (cmas||[]).map(function(rec){ return (
+            <div key={rec.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid "+C.br}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:600}}>{rec.subject.addr||"(no address)"}</div>
+                <div style={{fontSize:11,color:C.t3}}>{rec.suggest?"Suggested "+fmt(rec.suggest):""}{rec.saved?" · saved "+fmtDate(rec.saved):""}</div>
+              </div>
+              <Btn onClick={function(){ loadCMA(rec); }} style={{fontSize:10,padding:"3px 8px"}}>Open</Btn>
+              <Btn v="rose" onClick={function(){ delCMA(rec.id); }} style={{fontSize:10,padding:"3px 8px"}}>🗑</Btn>
+            </div>
+          ); })}
+      </Card>
+    </div>
+  );
+}
+
 function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   // Auto-captured MLS expireds (carry an mlNum) start in their own "new — cold call" inbox.
   // Once you tap ✓ Contacted they move into your regular watched-Expired list, alongside ones you added by hand.
