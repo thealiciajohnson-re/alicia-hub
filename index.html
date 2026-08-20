@@ -1003,7 +1003,7 @@ function PanelCMA({cmas,setCmas}) {
           <span>Other costs</span><input style={{...inp,width:60,fontSize:12,padding:"4px 6px"}} value={c.costs} onChange={function(e){ setC(function(p){return {...p,costs:e.target.value};}); }} />%
           <span style={{fontWeight:700,color:C.go,fontSize:14}}>→ Est. net {fmt(net)}</span>
         </div>
-        <div style={{fontSize:10.5,color:C.t3,marginTop:8}}>Rough estimate — excludes mortgage payoff, concessions, and prorations. Anchor the final CMA on your BAREIS sold comps.</div>
+        <div style={{fontSize:10.5,color:C.t3,marginTop:8}}>Rough gauge only — excludes loan payoff, prorations, title/escrow, and CA withholding. For a full statement that matches your title company's (like Fidelity's), use the <b>Seller's Net Sheet</b> tab.</div>
       </Card>
       {msg && <div style={{fontSize:12.5,color:C.ac,marginTop:4,marginBottom:8}}>{msg}</div>}
 
@@ -3705,8 +3705,10 @@ function PanelOH({oh,setOh}) {
 
 /* ── NET SHEET ───────────────────────────────────────────────── */
 function PanelNet({leads,setLeads}) {
-  var DEF = {price:715000,loan:380000,lc:2.5,bc:2.5,commMode:"gross",cityTax:0,propTax:0,conc:0,concMode:"pct",closing:3500,repairs:0,misc:0,other:0};
+  var DEF = {price:715000,loan:380000,lc:2.5,bc:2.5,commMode:"gross",commOverride:"",txOverride:"",cityTax:0,propTax:0,conc:0,concMode:"pct",titleFees:370,nhd:130,closing:0,repairs:0,misc:0,other:0,caWithhold:false,caRate:3.33,caWOverride:""};
   var [v,setV] = useState(DEF);
+  function updStr(k){ return function(e){ var val=e.target.value; setV(function(p){ return {...p,[k]:val}; }); }; }
+  function eff(auto,ov){ return (ov!==""&&ov!==undefined&&ov!==null&&!isNaN(Number(ov))) ? Number(ov) : auto; }
   var [parties,setParties] = useState([]);
   var [leadId,setLeadId] = useState("");
   var [saveMsg,setSaveMsg] = useState("");
@@ -3730,14 +3732,24 @@ function PanelNet({leads,setLeads}) {
   function partyFld(i,k){ return function(e){ var val=e.target.value; setParties(function(p){ return p.map(function(c,j){ return j===i?{...c,[k]:val}:c; }); }); }; }
   function delParty(i){ setParties(function(p){ return p.filter(function(c,j){ return j!==i; }); }); }
   var totalPct = parties.reduce(function(a,c){ return a+(Number(c.pct)||0); },0);
-  var tax=Math.round(v.price/1000)*1.10;
+  var autoTax=Math.round(v.price/1000)*1.10;
+  var tax=eff(autoTax, v.txOverride);
   var conc = (v.concMode==="amt") ? (Number(v.conc)||0) : (v.price*(Number(v.conc)||0)/100);
   var commBase = (v.commMode==="net") ? (v.price - conc) : v.price;   // commission on gross sale price, or net of concession
   var lc=v.lc/100*commBase, bc=v.bc/100*commBase;
+  var autoComm = lc+bc;
+  var commTotal = eff(autoComm, v.commOverride);
+  var commEdited = commTotal!==autoComm;
   var cityTaxAmt = v.price*(Number(v.cityTax)||0)/100;
-  var net = v.price - v.loan - lc - bc - tax - cityTaxAmt - (Number(v.propTax)||0) - conc - (Number(v.closing)||0) - v.repairs - (Number(v.misc)||0) - v.other;
+  var autoCaW = v.price*(Number(v.caRate)||0)/100;
+  var caW = v.caWithhold ? eff(autoCaW, v.caWOverride) : 0;
+  var titleFees = Number(v.titleFees)||0, nhd = Number(v.nhd)||0;
+  var net = v.price - v.loan - commTotal - tax - cityTaxAmt - (Number(v.propTax)||0) - conc - titleFees - nhd - caW - (Number(v.closing)||0) - v.repairs - (Number(v.misc)||0) - v.other;
   var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
-  var rows = [["Sale price",fmtMoney(v.price),false],["Loan balance / payoff","− "+fmtMoney(v.loan),true],["Seller commission ("+v.lc+"% of "+(v.commMode==="net"?"net":"gross")+")","− "+fmtMoney(Math.round(lc)),true],["Buyer commission ("+v.bc+"% of "+(v.commMode==="net"?"net":"gross")+")","− "+fmtMoney(Math.round(bc)),true],["County transfer tax ($1.10/$1k)","− "+fmtMoney(Math.round(tax)),true],["City transfer tax ("+(v.cityTax||0)+"%)","− "+fmtMoney(Math.round(cityTaxAmt)),true],["Property tax (proration)","− "+fmtMoney(Number(v.propTax)||0),true],["Seller concession"+(v.concMode==="pct"?" ("+(v.conc||0)+"%)":""),"− "+fmtMoney(Math.round(conc)),true],["Closing costs","− "+fmtMoney(Number(v.closing)||0),true],["Repairs","− "+fmtMoney(v.repairs),true],["Misc","− "+fmtMoney(Number(v.misc)||0),true],["Other","− "+fmtMoney(v.other),true]];
+  var commRows = commEdited
+    ? [["Commission (edited)","− "+fmtMoney(Math.round(commTotal)),true]]
+    : [["Seller commission ("+v.lc+"% of "+(v.commMode==="net"?"net":"gross")+")","− "+fmtMoney(Math.round(lc)),true],["Buyer commission ("+v.bc+"% of "+(v.commMode==="net"?"net":"gross")+")","− "+fmtMoney(Math.round(bc)),true]];
+  var rows = [["Sale price",fmtMoney(v.price),false],["Loan balance / payoff","− "+fmtMoney(v.loan),true]].concat(commRows).concat([["County transfer tax"+(tax!==autoTax?" (edited)":" ($1.10/$1k)"),"− "+fmtMoney(Math.round(tax)),true],["City transfer tax ("+(v.cityTax||0)+"%)","− "+fmtMoney(Math.round(cityTaxAmt)),true],["Title & escrow fees","− "+fmtMoney(titleFees),true],["Natural hazard disclosure","− "+fmtMoney(nhd),true],["CA state withholding"+(!v.caWithhold?" (exempt)":(caW!==autoCaW?" (edited)":" ("+(v.caRate||0)+"%)")),"− "+fmtMoney(Math.round(caW)),true],["Property tax (proration)","− "+fmtMoney(Number(v.propTax)||0),true],["Seller concession"+(v.concMode==="pct"?" ("+(v.conc||0)+"%)":""),"− "+fmtMoney(Math.round(conc)),true],["Closing costs","− "+fmtMoney(Number(v.closing)||0),true],["Repairs","− "+fmtMoney(v.repairs),true],["Misc","− "+fmtMoney(Number(v.misc)||0),true],["Other","− "+fmtMoney(v.other),true]]);
   return (
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:10}}>Seller's Net Sheet</div>
@@ -3755,8 +3767,15 @@ function PanelNet({leads,setLeads}) {
         <Card title="Deal Details">
           <Row><Fld label="Sale price ($)"><input style={inp} type="number" value={v.price} onChange={upd("price")} /></Fld><Fld label="Loan balance / payoff ($)"><input style={inp} type="number" value={v.loan} onChange={upd("loan")} /></Fld></Row>
           <Row><Fld label="Seller comm (%)"><input style={inp} type="number" step=".1" value={v.lc} onChange={upd("lc")} /></Fld><Fld label="Buyer comm (%)"><input style={inp} type="number" step=".1" value={v.bc} onChange={upd("bc")} /></Fld></Row>
-          <Row><Fld label="Commission based on"><select style={inp} value={v.commMode} onChange={function(e){ var m=e.target.value; setV(function(p){ return {...p,commMode:m}; }); }}><option value="gross">Gross (sale price)</option><option value="net">Net (price − concession)</option></select></Fld><Fld label=""><span/></Fld></Row>
-          <Row><Fld label="City transfer tax (%)"><input style={inp} type="number" step="any" value={v.cityTax} onChange={upd("cityTax")} /></Fld><Fld label="Property tax proration ($)"><input style={inp} type="number" value={v.propTax} onChange={upd("propTax")} /></Fld></Row>
+          <Row><Fld label="Commission based on"><select style={inp} value={v.commMode} onChange={function(e){ var m=e.target.value; setV(function(p){ return {...p,commMode:m}; }); }}><option value="gross">Gross (sale price)</option><option value="net">Net (price − concession)</option></select></Fld><Fld label="Commission ($ override)"><input style={inp} type="number" placeholder={"auto "+Math.round(autoComm)} value={v.commOverride} onChange={updStr("commOverride")} /></Fld></Row>
+          <Row><Fld label="County transfer tax ($ override)"><input style={inp} type="number" placeholder={"auto "+Math.round(autoTax)} value={v.txOverride} onChange={updStr("txOverride")} /></Fld><Fld label="City transfer tax (%)"><input style={inp} type="number" step="any" value={v.cityTax} onChange={upd("cityTax")} /></Fld></Row>
+          <Row><Fld label="Property tax proration ($)"><input style={inp} type="number" value={v.propTax} onChange={upd("propTax")} /></Fld><Fld label="CA withholding ($ override)"><input style={inp} type="number" placeholder={v.caWithhold?"auto "+Math.round(autoCaW):"— exempt"} value={v.caWOverride} onChange={updStr("caWOverride")} disabled={!v.caWithhold} /></Fld></Row>
+          <Row><Fld label="Title & escrow fees ($)"><input style={inp} type="number" value={v.titleFees} onChange={upd("titleFees")} /></Fld><Fld label="Natural hazard disclosure ($)"><input style={inp} type="number" value={v.nhd} onChange={upd("nhd")} /></Fld></Row>
+          <Row>
+            <Fld label="CA state withholding?"><label style={{display:"flex",alignItems:"center",gap:7,fontSize:13,color:C.t2,padding:"7px 0",cursor:"pointer"}}><input type="checkbox" checked={!!v.caWithhold} onChange={function(e){ var b=e.target.checked; setV(function(p){ return {...p,caWithhold:b}; }); }} /> Apply {v.caRate||3.33}% FTB withholding</label></Fld>
+            <Fld label="Withholding rate (%)"><input style={inp} type="number" step="any" value={v.caRate} onChange={upd("caRate")} disabled={!v.caWithhold} /></Fld>
+          </Row>
+          <div style={{fontSize:10.5,color:C.t3,marginTop:2,lineHeight:1.5}}>💡 <b>Auto vs. override:</b> commission, county transfer tax, and CA withholding calculate automatically from the sale price. Leave the "$ override" boxes <b>blank</b> to auto-calc, or type an exact dollar amount to match your title company's figure.<br/>CA withholding (Form 593) is usually <b>exempt</b> when the seller's a CA resident or it's their primary residence — leave it off unless the seller doesn't qualify (then it's ~3.33% of the sale price).</div>
           <Row><Fld label={"Seller concession ("+(v.concMode==="amt"?"$":"%")+")"}><input style={inp} type="number" step="any" value={v.conc} onChange={upd("conc")} /></Fld><Fld label="Concession type"><select style={inp} value={v.concMode} onChange={function(e){ var m=e.target.value; setV(function(p){ return {...p,concMode:m}; }); }}><option value="pct">% of price</option><option value="amt">$ amount</option></select></Fld></Row>
           <Row><Fld label="Closing costs ($)"><input style={inp} type="number" value={v.closing} onChange={upd("closing")} /></Fld><Fld label="Repairs ($)"><input style={inp} type="number" value={v.repairs} onChange={upd("repairs")} /></Fld></Row>
           <Row><Fld label="Misc ($)"><input style={inp} type="number" value={v.misc} onChange={upd("misc")} /></Fld><Fld label="Other ($)"><input style={inp} type="number" value={v.other} onChange={upd("other")} /></Fld></Row>
@@ -3764,7 +3783,7 @@ function PanelNet({leads,setLeads}) {
         <Card title="Net Proceeds">
           {rows.map(function(x){ return <div key={x[0]} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid "+C.br,fontSize:13}}><span style={{color:C.t2}}>{x[0]}</span><span style={{fontWeight:500,color:x[2]?C.ro:C.tx}}>{x[1]}</span></div>; })}
           <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginTop:4,borderTop:"2px solid "+C.brm,fontSize:15,fontWeight:700}}><span>Est. Net Proceeds</span><span style={{color:C.ac}}>{fmtMoney(Math.round(net))}</span></div>
-          <Btn v="gold" onClick={function(){ setAL(true); callAI("Explain this seller net sheet in plain language: Sale price "+fmtMoney(v.price)+", loan payoff "+fmtMoney(v.loan)+", commissions "+fmtMoney(Math.round(lc+bc))+", transfer taxes "+fmtMoney(Math.round(tax)+Math.round(cityTaxAmt))+", closing costs "+fmtMoney(Number(v.closing)||0)+", concession "+fmtMoney(Math.round(conc))+", repairs/misc/other "+fmtMoney(v.repairs+(Number(v.misc)||0)+v.other)+", net "+fmtMoney(Math.round(net))+". Warm, clear, under 120 words.").then(function(t){ setAT(t); setAL(false); }); }} style={{marginTop:8}}>✨ Explain to seller</Btn>
+          <Btn v="gold" onClick={function(){ setAL(true); callAI("Explain this seller net sheet in plain language: Sale price "+fmtMoney(v.price)+", loan payoff "+fmtMoney(v.loan)+", commissions "+fmtMoney(Math.round(commTotal))+", transfer taxes "+fmtMoney(Math.round(tax)+Math.round(cityTaxAmt))+", title & escrow "+fmtMoney(titleFees+nhd)+(caW>0?", CA state withholding "+fmtMoney(Math.round(caW)):"")+", closing costs "+fmtMoney(Number(v.closing)||0)+", concession "+fmtMoney(Math.round(conc))+", repairs/misc/other "+fmtMoney(v.repairs+(Number(v.misc)||0)+v.other)+", net "+fmtMoney(Math.round(net))+". Warm, clear, under 120 words.").then(function(t){ setAT(t); setAL(false); }); }} style={{marginTop:8}}>✨ Explain to seller</Btn>
           <AIBox text={aiTxt} loading={aiLd} />
         </Card>
       </div>
