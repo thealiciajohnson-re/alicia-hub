@@ -910,8 +910,8 @@ function PanelRoadmap({rems,setRems,setTab}) {
 /* ── EXPIRED / FSBO WATCHLIST ────────────────────────────────── */
 /* ── CMA / COMPS ─────────────────────────────────────────────── */
 function PanelCMA({cmas,setCmas}) {
-  function blankComp(){ return {addr:"",beds:"",baths:"",sqft:"",dist:"",price:"",sold:""}; }
-  var BLANK = {id:"",subject:{addr:"",beds:"",baths:"",sqft:"",condition:""},comps:[blankComp(),blankComp(),blankComp()],commission:5,costs:1.5,saved:""};
+  function blankComp(){ return {addr:"",beds:"",baths:"",sqft:"",lot:"",dist:"",price:"",sold:""}; }
+  var BLANK = {id:"",subject:{addr:"",beds:"",baths:"",sqft:"",lot:"",condition:""},comps:[blankComp(),blankComp(),blankComp()],commission:5,costs:1.5,saved:""};
   var [c,setC] = useState(BLANK);
   var [msg,setMsg] = useState("");
   function num(x){ var n=parseFloat(String(x==null?"":x).replace(/[^0-9.]/g,"")); return isFinite(n)?n:0; }
@@ -942,8 +942,8 @@ function PanelCMA({cmas,setCmas}) {
   function delCMA(id){ if(typeof window!=="undefined"&&window.confirm&&!window.confirm("Delete this saved CMA?"))return; setCmas(function(p){ return (p||[]).filter(function(x){return x.id!==id;}); }); }
   function copySummary(){
     var L=["🏷️ CMA — "+(c.subject.addr||""),
-      "Subject: "+(c.subject.beds||"?")+"bd / "+(c.subject.baths||"?")+"ba · "+(c.subject.sqft||"?")+" sqft"+(c.subject.condition?" · "+c.subject.condition:""),""];
-    c.comps.forEach(function(cp,i){ if(cp.addr) L.push("Comp "+(i+1)+": "+cp.addr+" — "+fmt(num(cp.price))+" · "+(cp.beds||"?")+"/"+(cp.baths||"?")+" · "+(cp.sqft||"?")+" sqft · "+(cp.dist||"?")+" mi · sold "+(cp.sold||"?")+"  ("+(ppsf[i]?"$"+Math.round(ppsf[i])+"/sqft":"—")+")"); });
+      "Subject: "+(c.subject.beds||"?")+"bd / "+(c.subject.baths||"?")+"ba · "+(c.subject.sqft||"?")+" sqft"+(c.subject.lot?" · "+c.subject.lot+" lot":"")+(c.subject.condition?" · "+c.subject.condition:""),""];
+    c.comps.forEach(function(cp,i){ if(cp.addr) L.push("Comp "+(i+1)+": "+cp.addr+" — "+fmt(num(cp.price))+" · "+(cp.beds||"?")+"/"+(cp.baths||"?")+" · "+(cp.sqft||"?")+" sqft"+(cp.lot?" · "+cp.lot+" lot":"")+" · "+(cp.dist||"?")+" mi · sold "+(cp.sold||"?")+"  ("+(ppsf[i]?"$"+Math.round(ppsf[i])+"/sqft":"—")+")"); });
     L.push("","Median $/sqft: $"+Math.round(medPpsf)+"  ·  Avg comp price: "+fmt(avgPrice),
       "Suggested value: "+fmt(suggest)+"   (range "+fmt(low)+" – "+fmt(high)+")",
       "Est. net to seller: "+fmt(net)+"  (after "+c.commission+"% commission + "+c.costs+"% costs)",
@@ -951,7 +951,7 @@ function PanelCMA({cmas,setCmas}) {
     var txt=L.join("\n");
     if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function(){ setMsg("✓ Summary copied — paste it into an email, text, or doc."); }, function(){ setMsg("Couldn't copy automatically."); });
   }
-  var COLS=[["addr","Address",2.4],["beds","Bd",0.5],["baths","Ba",0.5],["sqft","Sq Ft",0.8],["dist","Dist (mi)",0.7],["price","Sold $",1],["sold","Date sold",1]];
+  var COLS=[["addr","Address",2.4],["beds","Bd",0.5],["baths","Ba",0.5],["sqft","Sq Ft",0.8],["lot","Lot",0.8],["dist","Dist (mi)",0.7],["price","Sold $",1],["sold","Date sold",1]];
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,marginBottom:6}}>
@@ -970,6 +970,7 @@ function PanelCMA({cmas,setCmas}) {
           <input style={{...inp,width:80}} placeholder="Beds" value={c.subject.beds} onChange={function(e){ setSubj("beds",e.target.value); }} />
           <input style={{...inp,width:80}} placeholder="Baths" value={c.subject.baths} onChange={function(e){ setSubj("baths",e.target.value); }} />
           <input style={{...inp,width:110}} placeholder="Sq ft" value={c.subject.sqft} onChange={function(e){ setSubj("sqft",e.target.value); }} />
+          <input style={{...inp,width:110}} placeholder="Lot size" value={c.subject.lot} onChange={function(e){ setSubj("lot",e.target.value); }} />
           <input style={{...inp,flex:1,minWidth:140}} placeholder="Condition (e.g. updated, needs work)" value={c.subject.condition} onChange={function(e){ setSubj("condition",e.target.value); }} />
         </div>
       </Card>
