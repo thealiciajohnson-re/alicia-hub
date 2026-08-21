@@ -1366,6 +1366,17 @@ function PanelCal({rems,leads,setRems,setTab}) {
   var tmrws = (rems||[]).filter(function(r){ return r.date===tmr; }).sort(function(a,b){ return (a.time||"99:99")>(b.time||"99:99")?1:-1; });
   var tdc = {appt:C.ac,follow:C.go,email:C.go,urgent:C.ro,nurture:C.sk,other:C.t3};
 
+  // Google Calendar (read-only) — merged into today/tomorrow.
+  var [gcal,setGcal] = useState(null);
+  useEffect(function(){ fetch("https://mdlonovzxkpcahopwvac.supabase.co/functions/v1/gcal-events").then(function(r){ return r.json(); }).then(function(d){ if(d&&d.ok) setGcal(d); }).catch(function(){}); }, []);
+  var gEvents = (gcal && gcal.events) || [];
+  var gToday = gEvents.filter(function(e){ return e.date===td; }).sort(function(a,b){ return (a.time||"00:00")>(b.time||"00:00")?1:-1; });
+  var gTmr = gEvents.filter(function(e){ return e.date===tmr; }).sort(function(a,b){ return (a.time||"00:00")>(b.time||"00:00")?1:-1; });
+  function gRow(e,i){ return <div key={"g"+i} style={{display:"flex",gap:10,padding:"7px 0",borderBottom:"1px solid "+C.br}}>
+    <div style={{fontSize:12,color:C.t2,minWidth:62,fontFamily:"monospace"}}>{e.allday?"all day":(e.time||"—")}</div>
+    <div style={{flex:1}}><div style={{fontSize:13,fontWeight:500}}>{e.title} <Tag t="buyer">📅 Google</Tag></div>{e.location && <div style={{fontSize:12,color:C.t3}}>📍 {e.location}</div>}</div>
+  </div>; }
+
   // Data-driven daily focus — always works, no AI needed.
   function dailyFocus(){
     var dueFu = (leads||[]).filter(function(l){ return l.fu && l.fu<=td; });
@@ -1384,8 +1395,8 @@ function PanelCal({rems,leads,setRems,setTab}) {
   return (
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:14}}>Today — {new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"})}</div>
-      <Card title={"Today's Schedule ("+todays.length+")"}>
-        {todays.length===0
+      <Card title={"Today's Schedule ("+(todays.length+gToday.length)+")"}>
+        {(todays.length===0 && gToday.length===0)
           ? <div style={{color:C.t3,fontSize:13}}>Nothing scheduled today. <span style={{color:C.ac,cursor:"pointer"}} onClick={function(){ setTab("rems"); }}>Add a reminder →</span></div>
           : todays.map(function(r){
               return <div key={r.id} style={{display:"flex",gap:10,padding:"7px 0",borderBottom:"1px solid "+C.br,opacity:r.done?0.5:1}}>
@@ -1393,11 +1404,11 @@ function PanelCal({rems,leads,setRems,setTab}) {
                 <div style={{flex:1}}><div style={{fontSize:13,fontWeight:500,textDecoration:r.done?"line-through":"none"}}>{r.title} <Tag t="new">{r.type}</Tag></div>{r.leadId && leadName(r.leadId) && <div style={{fontSize:12,color:C.t3}}>👤 {leadName(r.leadId)}</div>}</div>
                 <Btn onClick={function(){ toggleRem(setRems, r); }} style={{fontSize:10,padding:"3px 8px"}} title={r.repeat&&r.repeat!=="none"?"Complete this one — the recurring reminder rolls forward to next "+REPLBL[r.repeat].toLowerCase():"Complete & remove from list"}>✓ Done</Btn>
               </div>;
-            })
+            }).concat(gToday.map(gRow))
         }
       </Card>
-      <Card title={"Tomorrow — "+tmrLabel+" ("+tmrws.length+")"}>
-        {tmrws.length===0
+      <Card title={"Tomorrow — "+tmrLabel+" ("+(tmrws.length+gTmr.length)+")"}>
+        {(tmrws.length===0 && gTmr.length===0)
           ? <div style={{color:C.t3,fontSize:13}}>Nothing scheduled for tomorrow yet.</div>
           : tmrws.map(function(r){
               return <div key={r.id} style={{display:"flex",gap:10,padding:"7px 0",borderBottom:"1px solid "+C.br,opacity:r.done?0.5:1}}>
@@ -1405,9 +1416,11 @@ function PanelCal({rems,leads,setRems,setTab}) {
                 <div style={{flex:1}}><div style={{fontSize:13,fontWeight:500,textDecoration:r.done?"line-through":"none"}}>{r.title} <Tag t="new">{r.type}</Tag></div>{r.leadId && leadName(r.leadId) && <div style={{fontSize:12,color:C.t3}}>👤 {leadName(r.leadId)}</div>}</div>
                 <Btn onClick={function(){ toggleRem(setRems, r); }} style={{fontSize:10,padding:"3px 8px"}} title={r.repeat&&r.repeat!=="none"?"Complete this one — the recurring reminder rolls forward to next "+REPLBL[r.repeat].toLowerCase():"Complete & remove from list"}>✓ Done</Btn>
               </div>;
-            })
+            }).concat(gTmr.map(gRow))
         }
       </Card>
+      {gcal && gcal.connected===false && <div style={{fontSize:11.5,color:C.t3,marginBottom:8,lineHeight:1.5}}>📅 <b>Google Calendar not connected yet.</b> {gcal.note||"Share your Google Calendar with the Hub's service account to see your events here."}</div>}
+      {gcal && gcal.connected && <div style={{fontSize:11,color:C.t3,marginBottom:8}}>📅 Synced from your Google Calendar (read-only, refreshes ~every 10 min).</div>}
       <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:8}}>
         <Btn v="primary" onClick={function(){ setAT(dailyFocus()); }}>🎯 Daily focus</Btn>
         <Btn v="gold" onClick={function(){ runAI("Give me a motivational real estate agent morning briefing for "+AGENT.name+" in Sonoma County. 3 bullets: one mindset tip, one market reminder, one action item. Under 80 words."); }}>✨ Morning briefing (AI)</Btn>
