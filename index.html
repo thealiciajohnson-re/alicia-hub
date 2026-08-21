@@ -914,29 +914,11 @@ function PanelCMA({cmas,setCmas}) {
   var BLANK = {id:"",subject:{addr:"",beds:"",baths:"",sqft:"",lot:"",condition:""},comps:[blankComp(),blankComp(),blankComp()],commission:5,costs:1.5,saved:""};
   var [c,setC] = useState(BLANK);
   var [msg,setMsg] = useState("");
-  var [avm,setAvm] = useState(null);
-  var [avmBusy,setAvmBusy] = useState(false);
   function num(x){ var n=parseFloat(String(x==null?"":x).replace(/[^0-9.]/g,"")); return isFinite(n)?n:0; }
   function fmt(n){ return n>0 ? "$"+Math.round(n).toLocaleString() : "—"; }
   function setSubj(f,v){ setC(function(p){ return {...p,subject:{...p.subject,[f]:v}}; }); }
   function setComp(i,f,v){ setC(function(p){ var cs=p.comps.slice(); cs[i]={...cs[i],[f]:v}; return {...p,comps:cs}; }); }
   function recalc(){ setC(function(p){ return {...p}; }); setMsg("🔄 Recalculated from your current comps."); }
-  function parseAddr(a){
-    var parts=String(a||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
-    var street=parts[0]||"", city=parts.length>=2?parts[1]:"", tail=parts.length>=3?parts[2]:(parts.length===2?parts[1]:"");
-    var zip=""; var m=tail.match(/(\d{5})/); if(m) zip=m[1];
-    var st="CA"; var sm=tail.replace(/\d/g,"").match(/\b([A-Za-z]{2})\b/); if(sm) st=sm[1].toUpperCase();
-    return {street:street,city:city,state:st,zip:zip};
-  }
-  function getInstant(){
-    var p=parseAddr(c.subject.addr);
-    if(!p.street){ setMsg("Add the subject address first for an instant estimate."); return; }
-    setAvmBusy(true); setAvm(null);
-    fetch(SUPABASE_URL+"/functions/v1/homevalue?street="+encodeURIComponent(p.street)+"&city="+encodeURIComponent(p.city)+"&state="+encodeURIComponent(p.state||"CA")+(p.zip?"&zip="+encodeURIComponent(p.zip):""),{headers:{"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+SUPABASE_ANON_KEY}})
-      .then(function(r){ return r.json(); })
-      .then(function(d){ setAvmBusy(false); if(d&&d.value&&!d.error){ setAvm(d); setMsg(""); } else { setAvm({error:(d&&d.error)||"No estimate found for that address."}); } })
-      .catch(function(){ setAvmBusy(false); setAvm({error:"Couldn't reach the estimate service — try again."}); });
-  }
 
   var ppsf = c.comps.map(function(cp){ var s=num(cp.sqft),p=num(cp.price); return (s>0&&p>0)?p/s:0; });
   function isSold(cp){ return (cp.status||"sold")==="sold"; }
@@ -1030,13 +1012,7 @@ function PanelCMA({cmas,setCmas}) {
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
           <Btn onClick={recalc} style={{fontSize:11}}>🔄 Recalculate</Btn>
-          <Btn v="primary" onClick={getInstant} style={{fontSize:11}}>{avmBusy?"⏳ Checking…":"🔄 Instant estimate"}</Btn>
         </div>
-        {avm && !avm.error && <div style={{background:C.gL,border:"1px solid "+C.gB,borderRadius:8,padding:"10px 12px",marginBottom:10}}>
-          <div style={{fontSize:13}}><b style={{color:C.go}}>Instant automated estimate: {avm.value}</b> <span style={{fontSize:11,color:C.t3}}>(PropertyRadar AVM{avm.sqft?" · "+avm.sqft+" sqft":""}{avm.beds!=null?" · "+avm.beds+"bd":""}{avm.baths!=null?"/"+avm.baths+"ba":""}{avm.yearBuilt?" · built "+avm.yearBuilt:""})</span></div>
-          <div style={{fontSize:11,color:C.t3,marginTop:3}}>Second-opinion cross-check only — your comp-based {fmt(suggest)} is the number to price on.</div>
-        </div>}
-        {avm && avm.error && <div style={{fontSize:11.5,color:C.ro,marginBottom:10}}>⚠️ {avm.error} Try a full address like "250 Maple Ave, Kenwood, CA 95452".</div>}
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",fontSize:12.5,color:C.t2}}>
           <span>Seller net at suggested price:</span>
           <span>Commission</span><input style={{...inp,width:60,fontSize:12,padding:"4px 6px"}} value={c.commission} onChange={function(e){ setC(function(p){return {...p,commission:e.target.value};}); }} />%
