@@ -88,6 +88,8 @@ const toDay = () => new Date().toISOString().split("T")[0];
 const fmtMoney = n => n ? "$" + Number(n).toLocaleString() : "—";
 const fmtDate = d => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}) : "—";
 const fmtTime = t => { if(!t) return ""; var p=String(t).split(":"); var h=+p[0], m=p[1]||"00"; var ap=h>=12?"PM":"AM"; h=h%12||12; return h+":"+m+" "+ap; };
+const SITUATIONS = [["","— none —"],["Foreclosure","🏚️ Foreclosure"],["Expired","⏰ Expired listing"],["FSBO","🪧 FSBO"],["Divorce","Divorce"],["Short Sale","Short sale"],["Probate","Probate"],["Absentee","Absentee owner"]];
+const SITU_LABEL = v => { var f=SITUATIONS.filter(function(s){ return s[0]===v; })[0]; return f?f[1]:v; };
 
 const AGENT = {
   name: "Alicia Johnson",
@@ -1535,7 +1537,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   var [fuNote,setFuNote] = useState("");
   var [fuRepeat,setFuRepeat] = useState("none");
   var [fuMsg,setFuMsg] = useState("");
-  var [srch,setSrch] = useState(""); var [fT,setFT] = useState(""); var [fTp,setFTp] = useState(""); var [fS,setFS] = useState("");
+  var [srch,setSrch] = useState(""); var [fT,setFT] = useState(""); var [fTp,setFTp] = useState(""); var [fS,setFS] = useState(""); var [fSit,setFSit] = useState("");
   var [sortKey,setSortKey] = useState(""); var [sortDir,setSortDir] = useState(1);
   var [modal,setModal] = useState(null); var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
   var [modalPlan,setModalPlan] = useState("");
@@ -1723,7 +1725,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     // All foreclosure/auction leads are auto-captured; expireds are auto only when they carry an MLS number.
     if (["expired","foreclosure","fsbo","lost"].indexOf(l.prospect)>=0) return false;  // watchlist prospects live in the Watchlist tab, not All Leads
     var q = (l.first+" "+l.last+" "+l.phone+" "+l.email+" "+(l.phone2||"")+" "+(l.email2||"")+" "+(l.addr||"")+" "+(l.addr2||"")).toLowerCase();
-    return (!srch||q.includes(srch.toLowerCase())) && (!fT||l.type===fT) && (!fTp||l.temp===fTp) && (!fS||l.source===fS);
+    return (!srch||q.includes(srch.toLowerCase())) && (!fT||l.type===fT) && (!fTp||l.temp===fTp) && (!fS||l.source===fS) && (!fSit||l.situation===fSit);
   });
   var TEMPRANK = {hot:0,warm:1,cold:2};
   var NURRANK = {active:0,"long-term":1,drip:2,monthly:3,quarterly:4,none:5};
@@ -1871,7 +1873,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     else { setSendMsg("Couldn't copy — select the text below."); }
   }
 
-  var SRCS = ["Home Value Quiz","Facebook Lead Ad","Instagram","TikTok","Zillow","Realtor.com","Referral","Sphere","Open House","Cold Call","Other"];
+  var SRCS = ["Home Value Quiz","Facebook Lead Ad","Instagram","TikTok","Zillow","Realtor.com","Referral","Sphere","Open House","Cold Call","Foreclosure","Expired","Divorce","Other"];
   var FARMS = ["Napa","Marin","Sonoma","Mendocino"];
   var BOXES = ["<$600k","$600–900k","$900k–1.2M","$1.2M+"];
   var isPaidSrc = function(s){ return /Quiz|Lead Ad|Instagram|TikTok|Facebook|Social/i.test(s||""); };
@@ -1894,6 +1896,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
           <select style={{...inp,width:115}} value={fT} onChange={function(e){ setFT(e.target.value); }}><option value="">All types</option><option value="buyer">Buyer</option><option value="seller">Seller</option><option value="both">Both</option><option value="closed">Closed Client</option></select>
           <select style={{...inp,width:110}} value={fTp} onChange={function(e){ setFTp(e.target.value); }}><option value="">All temps</option><option value="hot">Hot</option><option value="warm">Warm</option><option value="cold">Cold</option></select>
           <select style={{...inp,width:125}} value={fS} onChange={function(e){ setFS(e.target.value); }}><option value="">All sources</option>{SRCS.map(function(s){ return <option key={s}>{s}</option>; })}</select>
+          <select style={{...inp,width:135}} value={fSit} onChange={function(e){ setFSit(e.target.value); }}><option value="">All situations</option>{SITUATIONS.filter(function(s){ return s[0]; }).map(function(s){ return <option key={s[0]} value={s[0]}>{s[1]}</option>; })}</select>
         </div>
       </Card>
       {filtered.length===0 ? (
@@ -1932,7 +1935,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={function(){ setModal(null); }}>
           <div style={{background:C.sur,borderRadius:14,padding:20,width:520,maxWidth:"94vw",maxHeight:"86vh",overflowY:"auto"}} onClick={function(e){ e.stopPropagation(); }}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-              <div style={{fontSize:16,fontWeight:700}}>{modal.first} {modal.last}{modal.fubId?<span style={{fontSize:10,color:C.ac,marginLeft:6,fontWeight:500}}>✓ in FUB</span>:null}</div>
+              <div style={{fontSize:16,fontWeight:700}}>{modal.first} {modal.last}{modal.fubId?<span style={{fontSize:10,color:C.ac,marginLeft:6,fontWeight:500}}>✓ in FUB</span>:null}{modal.situation?<span style={{fontSize:10,fontWeight:600,marginLeft:8,padding:"2px 8px",borderRadius:20,background:C.gL,color:C.go,border:"1px solid "+C.gB,whiteSpace:"nowrap"}}>{SITU_LABEL(modal.situation)}{modal.situation==="Foreclosure"&&modal.auctionDate?" · 🔨 "+fmtDate(modal.auctionDate):""}{modal.situation==="Expired"&&modal.expiredDate?" · ⏰ "+fmtDate(modal.expiredDate):""}</span>:null}</div>
               <Btn onClick={function(){ setModal(null); setConfirmDelete(false); }} style={{padding:"4px 8px"}}>✕</Btn>
             </div>
             <Row>
@@ -1961,6 +1964,10 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                 <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}><Tag t={modal.temp}>{TICON[modal.temp]} {modal.temp}</Tag></div>
                 <div style={{fontSize:11,color:C.t3,marginBottom:3}}>Source</div>
                 <select style={{...inp,fontSize:12,marginBottom:6}} value={modal.source||""} onChange={function(e){ saveContact("source",e.target.value); }}>{SRCS.indexOf(modal.source)<0 && modal.source ? <option value={modal.source}>{modal.source}</option> : null}{SRCS.map(function(s){ return <option key={s} value={s}>{s}</option>; })}</select>
+                <div style={{fontSize:11,color:C.t3,marginBottom:3}}>Situation</div>
+                <select style={{...inp,fontSize:12,marginBottom:6}} value={modal.situation||""} onChange={function(e){ saveContact("situation",e.target.value); }}>{SITUATIONS.map(function(s){ return <option key={s[0]} value={s[0]}>{s[1]}</option>; })}</select>
+                {modal.situation==="Foreclosure" && <div><div style={{fontSize:11,color:C.t3,marginBottom:3}}>🔨 Auction date</div><input style={{...inp,fontSize:12,marginBottom:6}} type="date" value={modal.auctionDate||""} onChange={function(e){ saveContact("auctionDate",e.target.value); }} /></div>}
+                {modal.situation==="Expired" && <div><div style={{fontSize:11,color:C.t3,marginBottom:3}}>⏰ Listing expired date</div><input style={{...inp,fontSize:12,marginBottom:6}} type="date" value={modal.expiredDate||""} onChange={function(e){ saveContact("expiredDate",e.target.value); }} /></div>}
                 <div style={{fontSize:11,color:C.t3,marginBottom:3}}>Farm area · Buy-box</div>
                 <div style={{display:"flex",gap:5,marginBottom:6}}>
                   <select style={{...inp,fontSize:12,flex:1}} value={modal.farm||""} onChange={function(e){ saveContact("farm",e.target.value); }}><option value="">Farm…</option>{FARMS.map(function(f){ return <option key={f} value={f}>{f}</option>; })}</select>
@@ -2130,7 +2137,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
 
 /* ── ADD LEAD ────────────────────────────────────────────────── */
 function PanelAddLead({addLead,setTab}) {
-  var blank = {first:"",last:"",phone:"",phone2:"",email:"",email2:"",addr:"",zip:"",type:"buyer",temp:"warm",source:"Zillow",nurture:"active",timeline:"0–3 months",fdays:3,notes:"",autoNurture:"off",lastNurtured:null,bday:"",sendIntro:true};
+  var blank = {first:"",last:"",phone:"",phone2:"",email:"",email2:"",addr:"",zip:"",type:"buyer",temp:"warm",source:"Zillow",situation:"",auctionDate:"",expiredDate:"",nurture:"active",timeline:"0–3 months",fdays:3,notes:"",autoNurture:"off",lastNurtured:null,bday:"",sendIntro:true};
   var [form,setForm] = useState(blank); var [st,setSt] = useState(""); var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
   function fld(k){ return function(e){ setForm(function(p){ return {...p,[k]:e.target.value}; }); }; }
   function save(withAI) {
@@ -2150,7 +2157,7 @@ function PanelAddLead({addLead,setTab}) {
     if (withAI) { setAL(true); callAI("Write a short warm first-contact "+(form.type==="seller"?"text":"email")+" from "+AGENT.name+" ("+AGENT.co+") to "+form.first+", a new "+form.type+" lead from "+form.source+". Under 60 words, warm, ends with easy question.").then(function(t){ setAT(t); setAL(false); }); }
     setForm(blank);
   }
-  var SRCS = "Home Value Quiz,Facebook Lead Ad,Instagram,TikTok,Zillow,Realtor.com,Referral,Sphere,Open House,Cold Call,Social Media,Other".split(",");
+  var SRCS = "Home Value Quiz,Facebook Lead Ad,Instagram,TikTok,Zillow,Realtor.com,Referral,Sphere,Open House,Cold Call,Foreclosure,Expired,Divorce,Social Media,Other".split(",");
   return (
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:14}}>Add Lead</div>
@@ -2177,6 +2184,15 @@ function PanelAddLead({addLead,setTab}) {
           <Fld label="Temperature"><select style={inp} value={form.temp} onChange={fld("temp")}><option value="hot">Hot</option><option value="warm">Warm</option><option value="cold">Cold</option></select></Fld>
           <Fld label="Source"><select style={inp} value={form.source} onChange={fld("source")}>{SRCS.map(function(s){ return <option key={s}>{s}</option>; })}</select></Fld>
           <Fld label="Nurture"><select style={inp} value={form.nurture} onChange={fld("nurture")}><option value="active">Active</option><option value="long-term">Long-term</option><option value="drip">Drip</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="none">None</option></select></Fld>
+        </Row>
+        <Row cols="1fr 1fr 1fr">
+          <Fld label="Situation"><select style={inp} value={form.situation} onChange={fld("situation")}>{SITUATIONS.map(function(s){ return <option key={s[0]} value={s[0]}>{s[1]}</option>; })}</select></Fld>
+          {form.situation==="Foreclosure"
+            ? <Fld label="🔨 Auction date"><input style={inp} type="date" value={form.auctionDate} onChange={fld("auctionDate")} /></Fld>
+            : form.situation==="Expired"
+              ? <Fld label="⏰ Listing expired date"><input style={inp} type="date" value={form.expiredDate} onChange={fld("expiredDate")} /></Fld>
+              : <Fld label=""><span/></Fld>}
+          <Fld label=""><span/></Fld>
         </Row>
         <Row>
           <Fld label="Timeline"><select style={inp} value={form.timeline} onChange={fld("timeline")}><option>ASAP / actively looking</option><option>0–3 months</option><option>3–6 months</option><option>6–12 months</option><option>12+ months</option><option>Just curious</option></select></Fld>
