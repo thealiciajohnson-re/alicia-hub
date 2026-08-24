@@ -90,6 +90,17 @@ const fmtDate = d => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US",{m
 const fmtTime = t => { if(!t) return ""; var p=String(t).split(":"); var h=+p[0], m=p[1]||"00"; var ap=h>=12?"PM":"AM"; h=h%12||12; return h+":"+m+" "+ap; };
 const SITUATIONS = [["","— none —"],["Foreclosure","🏚️ Foreclosure"],["Expired","⏰ Expired listing"],["FSBO","🪧 FSBO"],["Divorce","Divorce"],["Short Sale","Short sale"],["Probate","Probate"],["Absentee","Absentee owner"]];
 const SITU_LABEL = v => { var f=SITUATIONS.filter(function(s){ return s[0]===v; })[0]; return f?f[1]:v; };
+// Whether a lead should be HIDDEN from the All Leads tab (lives only in the Watchlist).
+// Rule: "lost" leads are monitor-only; NEW auto-captured & uncontacted prospects are hidden;
+// but anything manually added, or once contacted ("working"), stays in All Leads.
+const hideFromLeads = l => {
+  if(!l) return false;
+  var p = l.prospect;
+  if(p==="lost") return true;                                  // monitoring only — never in Leads
+  if(["expired","foreclosure","fsbo"].indexOf(p)<0) return false;
+  if(l.contacted) return false;                                // contacted = working = show in Leads
+  return !!(l.mlNum || l.radarId || l.listName);               // hide only NEW auto-captured; manual entries stay
+};
 
 const AGENT = {
   name: "Alicia Johnson",
@@ -721,7 +732,7 @@ function App() {
 
   const NAV = [
     {s:"Daily",items:[{id:"dashboard",l:"Dashboard"},{id:"calendar",l:"Today"},{id:"rems",l:"Reminders",b:pendRem}]},
-    {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.filter(function(l){ return ["expired","foreclosure","fsbo","lost"].indexOf(l.prospect)<0; }).length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired/FSBO/Lost",b:watchN}]},
+    {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.filter(function(l){ return !hideFromLeads(l); }).length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired/FSBO/Lost",b:watchN}]},
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"cma",l:"🏷️ CMA / Comps"},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
@@ -1055,6 +1066,7 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   var lost = (leads||[]).filter(function(l){ return l.prospect==="lost"; }).sort(function(a,b){ return (a.listingExpires||"9999-99")<(b.listingExpires||"9999-99")?-1:1; });
   function open(l){ if(setFocusLead) setFocusLead(l.id); setTab("leads"); }
   function toNurture(l){ if(setLeads) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,prospect:"",nurture:"monthly",temp:"warm",log:[...(x.log||[]),toDay()+" — Converted from Expired to nurture"]}:x; }); }); }
+  function wonBack(l){ if(setLeads) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,prospect:"",contacted:true,temp:"warm",nurture:x.nurture||"active",log:[...(x.log||[]),toDay()+" — Won back from Lost → returned to Leads"]}:x; }); }); }
   function markContacted(l){ if(setLeads) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,contacted:true,lc:toDay(),log:[...(x.log||[]),toDay()+" — Cold-called (moved to watching)"]}:x; }); }); }
   function del(l){ if(!(typeof window!=="undefined"&&window.confirm)||window.confirm("Delete this lead as a dead lead? This can't be undone.")){ if(dismissLead) dismissLead(l); if(setLeads) setLeads(function(p){ return p.filter(function(x){ return x.id!==l.id; }); }); } }
   function row(l){
@@ -1085,6 +1097,7 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
             {l.listingExpires ? (due ? "⏰ Listing likely expired — follow up NOW!" : soon ? ("📅 Listing expires "+fmtDate(l.listingExpires)+" (in "+d+" days) — get ready") : ("Listing expires "+fmtDate(l.listingExpires))) : "⚠️ Add their listing's expiration date on the lead card"}
           </div>
         </div>
+        <Btn v="primary" style={{fontSize:10,padding:"3px 8px",whiteSpace:"nowrap"}} title="Won them back — return to your active Leads tab" onClick={function(e){ e.stopPropagation(); wonBack(l); }}>↩ Won back → Leads</Btn>
         <span style={{fontSize:11,color:C.ac}}>Open →</span>
       </div>
     );
@@ -1723,7 +1736,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   var filtered = leads.filter(function(l){
     // Hide un-worked prospecting properties from the main list until you work them (✓ Contacted or → Nurture).
     // All foreclosure/auction leads are auto-captured; expireds are auto only when they carry an MLS number.
-    if (["expired","foreclosure","fsbo","lost"].indexOf(l.prospect)>=0) return false;  // watchlist prospects live in the Watchlist tab, not All Leads
+    if (hideFromLeads(l)) return false;  // NEW auto-captured prospects + lost leads live in the Watchlist, not All Leads
     var q = (l.first+" "+l.last+" "+l.phone+" "+l.email+" "+(l.phone2||"")+" "+(l.email2||"")+" "+(l.addr||"")+" "+(l.addr2||"")).toLowerCase();
     return (!srch||q.includes(srch.toLowerCase())) && (!fT||l.type===fT) && (!fTp||l.temp===fTp) && (!fS||l.source===fS) && (!fSit||l.situation===fSit);
   });
@@ -1882,7 +1895,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:14}}>
-        <div style={{fontSize:18,fontWeight:700}}>All Leads <span style={{fontSize:13,fontWeight:400,color:C.t3}}>{filtered.length} of {leads.filter(function(l){ return ["expired","foreclosure","fsbo","lost"].indexOf(l.prospect)<0; }).length}</span></div>
+        <div style={{fontSize:18,fontWeight:700}}>All Leads <span style={{fontSize:13,fontWeight:400,color:C.t3}}>{filtered.length} of {leads.filter(function(l){ return !hideFromLeads(l); }).length}</span></div>
         <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
           <Btn v="primary" onClick={syncAllBrevo} style={{fontSize:11}}>{brevoBusy?"⟳ Adding…":"📨 Sync all to Brevo"}</Btn>
           <Btn onClick={exportCSV} style={{fontSize:11}}>⬇ CSV</Btn>
