@@ -90,6 +90,9 @@ const fmtDate = d => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US",{m
 const fmtTime = t => { if(!t) return ""; var p=String(t).split(":"); var h=+p[0], m=p[1]||"00"; var ap=h>=12?"PM":"AM"; h=h%12||12; return h+":"+m+" "+ap; };
 const SITUATIONS = [["","— none —"],["Foreclosure","🏚️ Foreclosure"],["Expired","⏰ Expired listing"],["FSBO","🪧 FSBO"],["Divorce","Divorce"],["Short Sale","Short sale"],["Probate","Probate"],["Absentee","Absentee owner"]];
 const SITU_LABEL = v => { var f=SITUATIONS.filter(function(s){ return s[0]===v; })[0]; return f?f[1]:v; };
+const cleanHandle = h => String(h||"").trim().replace(/^@+/,"").replace(/\s+/g,"");
+const igUrl = h => "https://instagram.com/"+cleanHandle(h);
+const tiktokUrl = h => "https://tiktok.com/@"+cleanHandle(h);
 // Whether a lead should be HIDDEN from the All Leads tab (lives only in the Watchlist).
 // Rule: "lost" leads are monitor-only; NEW auto-captured & uncontacted prospects are hidden;
 // but anything manually added, or once contacted ("working"), stays in All Leads.
@@ -1965,6 +1968,15 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                 <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Address" value={addrDraft} onChange={function(e){setAddrDraft(e.target.value);}} onBlur={function(){saveContact("addr",addrDraft);}} />
                 <input style={{...inp,marginBottom:4,fontSize:12,fontFamily:"monospace"}} placeholder="ZIP code (for local market numbers)" value={zipDraft} onChange={function(e){setZipDraft(e.target.value);}} onBlur={function(){saveContact("zip",zipDraft.trim());}} />
                 <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="2nd address — ranch, rental, other property (optional)" value={addr2Draft} onChange={function(e){setAddr2Draft(e.target.value);}} onBlur={function(){saveContact("addr2",addr2Draft);}} />
+                <div style={{fontSize:11,color:C.t3,marginBottom:2}}>📷 Instagram · 🎵 TikTok</div>
+                <div style={{display:"flex",gap:4,marginBottom:4}}>
+                  <input style={{...inp,fontSize:12}} placeholder="@instagram" value={modal.ig||""} onChange={function(e){ saveContact("ig",e.target.value); }} />
+                  <input style={{...inp,fontSize:12}} placeholder="@tiktok" value={modal.tiktok||""} onChange={function(e){ saveContact("tiktok",e.target.value); }} />
+                </div>
+                {(cleanHandle(modal.ig)||cleanHandle(modal.tiktok)) && <div style={{display:"flex",gap:10,marginBottom:6,fontSize:11,flexWrap:"wrap"}}>
+                  {cleanHandle(modal.ig) && <a href={igUrl(modal.ig)} target="_blank" rel="noopener noreferrer" style={{color:C.ac,textDecoration:"none",fontWeight:600}}>📷 open @{cleanHandle(modal.ig)} →</a>}
+                  {cleanHandle(modal.tiktok) && <a href={tiktokUrl(modal.tiktok)} target="_blank" rel="noopener noreferrer" style={{color:C.ac,textDecoration:"none",fontWeight:600}}>🎵 open @{cleanHandle(modal.tiktok)} →</a>}
+                </div>}
                 <div style={{fontSize:11,color:C.t3,marginBottom:2}}>🎂 Birthday</div>
                 <input style={{...inp,fontSize:12}} type="date" value={modal.bday||""} onChange={function(e){ saveContact("bday",e.target.value); }} />
               </div>
@@ -2150,13 +2162,16 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
 
 /* ── ADD LEAD ────────────────────────────────────────────────── */
 function PanelAddLead({addLead,setTab}) {
-  var blank = {first:"",last:"",phone:"",phone2:"",email:"",email2:"",addr:"",zip:"",type:"buyer",temp:"warm",source:"Zillow",situation:"",auctionDate:"",expiredDate:"",nurture:"active",timeline:"0–3 months",fdays:3,notes:"",autoNurture:"off",lastNurtured:null,bday:"",sendIntro:true};
+  var blank = {first:"",last:"",phone:"",phone2:"",email:"",email2:"",ig:"",tiktok:"",addr:"",zip:"",type:"buyer",temp:"warm",source:"Zillow",situation:"",auctionDate:"",expiredDate:"",nurture:"active",timeline:"0–3 months",fdays:3,notes:"",autoNurture:"off",lastNurtured:null,bday:"",sendIntro:true};
   var [form,setForm] = useState(blank); var [st,setSt] = useState(""); var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
   function fld(k){ return function(e){ setForm(function(p){ return {...p,[k]:e.target.value}; }); }; }
   function save(withAI) {
-    if (!form.first.trim()||!form.last.trim()) { setSt("First and last name required."); return; }
+    var firstName = form.first.trim();
+    // Social leads: if all we have is a username, use it as the display name so it shows everywhere.
+    if (!firstName && (form.ig||form.tiktok)) firstName = "@"+cleanHandle(form.ig||form.tiktok);
+    if (!firstName) { setSt("Add a name — or an Instagram/TikTok username."); return; }
     var fd = new Date(); fd.setDate(fd.getDate()+Number(form.fdays||3));
-    var lead = {id:uid(),...form,added:toDay(),fu:fd.toISOString().split("T")[0],lc:null,log:[]};
+    var lead = {id:uid(),...form,first:firstName,ig:cleanHandle(form.ig),tiktok:cleanHandle(form.tiktok),added:toDay(),fu:fd.toISOString().split("T")[0],lc:null,log:[]};
     addLead(lead);
     setSt("Saved. Follow-up: "+fmtDate(lead.fu));
     // ⚡ Speed-to-lead: instantly send a warm intro email via Brevo (tracked) the moment the lead is added.
@@ -2167,7 +2182,7 @@ function PanelAddLead({addLead,setTab}) {
         if(res && res.messageId) setSt("⚡ Saved + instant intro email sent to "+lead.first+"! Follow-up: "+fmtDate(lead.fu));
       });
     }
-    if (withAI) { setAL(true); callAI("Write a short warm first-contact "+(form.type==="seller"?"text":"email")+" from "+AGENT.name+" ("+AGENT.co+") to "+form.first+", a new "+form.type+" lead from "+form.source+". Under 60 words, warm, ends with easy question.").then(function(t){ setAT(t); setAL(false); }); }
+    if (withAI) { setAL(true); callAI("Write a short warm first-contact "+(form.type==="seller"?"text":"email")+" from "+AGENT.name+" ("+AGENT.co+") to "+firstName+", a new "+form.type+" lead from "+form.source+". Under 60 words, warm, ends with easy question.").then(function(t){ setAT(t); setAL(false); }); }
     setForm(blank);
   }
   var SRCS = "Home Value Quiz,Facebook Lead Ad,Instagram,TikTok,Zillow,Realtor.com,Referral,Sphere,Open House,Cold Call,Foreclosure,Expired,Divorce,Social Media,Other".split(",");
@@ -2176,8 +2191,8 @@ function PanelAddLead({addLead,setTab}) {
       <div style={{fontSize:18,fontWeight:700,marginBottom:14}}>Add Lead</div>
       <Card title="Contact Info">
         <Row cols="1fr 1fr 1fr">
-          <Fld label="First Name *"><input style={inp} placeholder="Jane" value={form.first} onChange={fld("first")} /></Fld>
-          <Fld label="Last Name *"><input style={inp} placeholder="Smith" value={form.last} onChange={fld("last")} /></Fld>
+          <Fld label="First Name"><input style={inp} placeholder="Jane" value={form.first} onChange={fld("first")} /></Fld>
+          <Fld label="Last Name"><input style={inp} placeholder="Smith" value={form.last} onChange={fld("last")} /></Fld>
           <Fld label="Phone"><input style={inp} placeholder="707-555-0100" value={form.phone} onChange={fld("phone")} /></Fld>
         </Row>
         <Row cols="1fr 1fr 1fr">
@@ -2185,6 +2200,11 @@ function PanelAddLead({addLead,setTab}) {
           <Fld label="Email"><input style={inp} type="email" placeholder="jane@email.com" value={form.email} onChange={fld("email")} /></Fld>
           <Fld label="Email 2"><input style={inp} type="email" placeholder="(optional)" value={form.email2} onChange={fld("email2")} /></Fld>
         </Row>
+        <Row cols="1fr 1fr">
+          <Fld label="📷 Instagram username"><input style={inp} placeholder="@username" value={form.ig} onChange={fld("ig")} /></Fld>
+          <Fld label="🎵 TikTok username"><input style={inp} placeholder="@username" value={form.tiktok} onChange={fld("tiktok")} /></Fld>
+        </Row>
+        <div style={{fontSize:11,color:C.t3,marginTop:-2,marginBottom:2}}>💡 Only have a username? Just fill in Instagram or TikTok — you can save the lead with no name, phone, or email. The handle becomes their name until you learn it.</div>
         <Row cols="2fr 1fr 1fr">
           <Fld label="Address"><input style={inp} placeholder="123 Main St, Santa Rosa" value={form.addr} onChange={fld("addr")} /></Fld>
           <Fld label="ZIP code"><input style={inp} placeholder="95403" value={form.zip} onChange={fld("zip")} /></Fld>
