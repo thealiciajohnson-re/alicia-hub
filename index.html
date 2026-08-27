@@ -2087,6 +2087,28 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
               {fuMsg && <div style={{fontSize:11.5,color:C.ac,marginTop:6,fontWeight:600}}>{fuMsg}</div>}
             </div>
             <div style={{marginBottom:8}}>
+              {(function(){
+                var lr = (rems||[]).filter(function(r){ return r.leadId===modal.id; }).sort(function(a,b){ return (a.date+" "+(a.time||"99:99"))<(b.date+" "+(b.time||"99:99"))?-1:1; });
+                return <div>
+                  <div style={{fontSize:11,color:C.t3,marginBottom:4}}>🔔 Reminders for this lead <span>({lr.length})</span></div>
+                  {lr.length===0
+                    ? <div style={{fontSize:12,color:C.t3}}>None yet — set a follow-up alert above and it'll appear here.</div>
+                    : lr.map(function(r){
+                        var overdue = !r.done && r.date<toDay(), today = !r.done && r.date===toDay();
+                        return <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid "+C.br,opacity:r.done?0.55:1}}>
+                          <div style={{minWidth:78,fontSize:11,fontFamily:"monospace",color:overdue?C.ro:today?C.go:C.t2}}>{fmtDate(r.date)}{r.time?" "+fmtTime(r.time):""}</div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:12.5,fontWeight:500,textDecoration:r.done?"line-through":"none"}}>{r.title}{r.repeat&&r.repeat!=="none"?<span style={{fontSize:10,color:C.go,marginLeft:5}}>🔁 {REPLBL[r.repeat]}</span>:null}{overdue?<span style={{fontSize:10,color:C.ro,fontWeight:700,marginLeft:5}}>OVERDUE</span>:today?<span style={{fontSize:10,color:C.go,fontWeight:700,marginLeft:5}}>TODAY</span>:null}</div>
+                            {r.note && <div style={{fontSize:11,color:C.t3}}>{r.note}</div>}
+                          </div>
+                          <Btn style={{fontSize:10,padding:"2px 7px"}} onClick={function(){ toggleRem(setRems,r); }} title={r.done?"Mark not done":"Mark done"}>{r.done?"↺":"✓"}</Btn>
+                          <Btn v="rose" style={{fontSize:10,padding:"2px 7px"}} onClick={function(){ setRems(function(p){ return p.filter(function(x){ return x.id!==r.id; }); }); }} title="Delete reminder">🗑</Btn>
+                        </div>;
+                      })}
+                </div>;
+              })()}
+            </div>
+            <div style={{marginBottom:8}}>
               <div style={{fontSize:11,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase",color:C.t3,marginBottom:6}}>Action Plan</div>
               {enrolled.filter(function(e){ return e.leadId===modal.id; }).length===0
                 ? <div style={{fontSize:12,color:C.t3,marginBottom:6}}>Not enrolled in any plan.</div>
@@ -2149,6 +2171,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                   <input type="date" style={{...inp,width:150,fontSize:12}} value={modal.listingExpires||""} onChange={function(e){ saveContact("listingExpires",e.target.value); }} />
                 </div>
                 <div style={{fontSize:10.5,color:C.t3,marginTop:5}}>Set the expiration date and they'll flag red in your <b>Expired / FSBO / Lost</b> watchlist when it's time to follow up.</div>
+                <div style={{fontSize:10.5,color:"#2e7d32",marginTop:5}}>🔒 Marking Lost keeps <b>everything</b> — their profile info and any saved net sheet are safe. Only the red “Delete lead” button removes anything.</div>
               </div>
             )}
             <div style={{fontSize:10.5,color:C.t3,marginTop:8}}>✉️ To email this lead, use <b>AI Email Writer</b> (left menu) — start typing their name in the To box and it'll pop up.</div>
