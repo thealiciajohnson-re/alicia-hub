@@ -84,7 +84,11 @@ async function sset(k,v){
 
 /* ── Constants ───────────────────────────────────────────────── */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-const toDay = () => new Date().toISOString().split("T")[0];
+// Local-date helper. toISOString() is UTC, so before this fix every date in
+// the Hub rolled over to "tomorrow" at 5pm Pacific — reminders, follow-ups
+// due, the Today tab, all of it. ymd() formats any Date in LOCAL time.
+const ymd = d => { const x = (d instanceof Date) ? d : new Date(d); return new Date(x.getTime() - x.getTimezoneOffset()*60000).toISOString().split("T")[0]; };
+const toDay = () => ymd(new Date());
 const fmtMoney = n => n ? "$" + Number(n).toLocaleString() : "—";
 const fmtDate = d => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}) : "—";
 const fmtTime = t => { if(!t) return ""; var p=String(t).split(":"); var h=+p[0], m=p[1]||"00"; var ap=h>=12?"PM":"AM"; h=h%12||12; return h+":"+m+" "+ap; };
@@ -141,7 +145,7 @@ function nurtureNext(l){
   if (!nurtureOn(l)) return null;
   if (!l.lastNurtured) return toDay();
   var d = new Date(l.lastNurtured+"T12:00:00"); d.setDate(d.getDate()+NURDAYS[l.autoNurture]);
-  return d.toISOString().split("T")[0];
+  return ymd(d);
 }
 
 /* ── Home-closing anniversaries (yearly "happy anniversary" emails) ── */
@@ -153,7 +157,7 @@ function nextAnniversary(closeDate){
   var today=new Date(toDay()+"T12:00:00");
   var a=new Date(c); a.setFullYear(today.getFullYear());
   if(a<today) a.setFullYear(today.getFullYear()+1);
-  return a.toISOString().split("T")[0];
+  return ymd(a);
 }
 // How many years since closing, as of the given anniversary date (defaults to next one).
 function anniversaryYears(closeDate, onDate){
@@ -171,14 +175,14 @@ function nextBirthday(bday){
   var today=new Date(toDay()+"T12:00:00"), y=today.getFullYear();
   var a=new Date(y,m-1,dd,12);
   if(a<today) a=new Date(y+1,m-1,dd,12);
-  return a.toISOString().split("T")[0];
+  return ymd(a);
 }
 function bdayDaysUntil(l){ return l && l.bday ? daysUntil(nextBirthday(l.bday)) : null; }
 // Next occurrence of a weekday (0=Sun..6=Sat), returns date string (today if it matches).
 function nextWeekday(dow){
   var t=new Date(toDay()+"T12:00:00");
   t.setDate(t.getDate()+(((dow - t.getDay())%7)+7)%7);
-  return t.toISOString().split("T")[0];
+  return ymd(t);
 }
 
 // Pull the lead's city from their address ("507 Alta Ave, Rohnert Park, CA 94928" -> "Rohnert Park")
@@ -239,7 +243,7 @@ function nextDate(date, repeat){
   else if(repeat==="biweekly") d.setDate(d.getDate()+14);
   else if(repeat==="monthly") d.setMonth(d.getMonth()+1);
   else return null;
-  return d.toISOString().split("T")[0];
+  return ymd(d);
 }
 // Toggle done; when completing a recurring reminder, spawn its next occurrence.
 // Completing a reminder: one-time reminders drop off the list; weekly/monthly ones are
@@ -641,7 +645,7 @@ function App() {
     if (hasUpcoming) return;
     var d = new Date(toDay()+"T12:00:00");
     d.setDate(d.getDate() + ((1 - d.getDay() + 7) % 7));   // next Monday (today if it's Monday)
-    var date = d.toISOString().split("T")[0];
+    var date = ymd(d);
     if (rems.some(function(r){ return r.type==="nurture" && r.date===date; })) return;
     setRems(function(p){ return [...p,{id:uid(),title:"Run Auto-Nurture queue",date:date,time:"09:00",type:"nurture",done:false}]; });
   }, [ready,rems]);
@@ -684,7 +688,7 @@ function App() {
     setLeads(function(p){ return [l,...p]; });
     setAct(function(p){ return {...p,leads:p.leads+1}; });
     var fd = new Date(); fd.setDate(fd.getDate()+(l.fdays||3));
-    setRems(function(p){ return [...p,{id:uid(),title:"Follow up — "+l.first+" "+l.last,date:fd.toISOString().split("T")[0],time:"10:00",type:"follow",done:false}]; });
+    setRems(function(p){ return [...p,{id:uid(),title:"Follow up — "+l.first+" "+l.last,date:ymd(fd),time:"10:00",type:"follow",done:false}]; });
     // Auto-sync the new lead into Follow Up Boss
     pushToFub(l).then(function(res){
       if(res && res.fubId) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,fubId:res.fubId,fubSynced:toDay()}:x; }); });
@@ -705,7 +709,7 @@ function App() {
       var r = await fetch(SUPABASE_URL+"/functions/v1/fub-pull", {method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+SUPABASE_ANON_KEY},body:JSON.stringify({knownFubIds:knownFubIds,knownEmails:knownEmails})});
       var d = await r.json();
       if(d && d.people && d.people.length){
-        var fresh = d.people.map(function(p){ var fd=new Date(); fd.setDate(fd.getDate()+3); return {id:uid(), first:p.first||"", last:p.last||"", phone:p.phone||"", phone2:"", email:p.email||"", email2:"", addr:"", zip:"", type:"buyer", temp:"warm", source:p.source||"Follow Up Boss", nurture:"active", timeline:"0–3 months", notes:p.notes||"", added:toDay(), fu:fd.toISOString().split("T")[0], lc:null, log:[], fubId:p.fubId, fubSynced:toDay()}; });
+        var fresh = d.people.map(function(p){ var fd=new Date(); fd.setDate(fd.getDate()+3); return {id:uid(), first:p.first||"", last:p.last||"", phone:p.phone||"", phone2:"", email:p.email||"", email2:"", addr:"", zip:"", type:"buyer", temp:"warm", source:p.source||"Follow Up Boss", nurture:"active", timeline:"0–3 months", notes:p.notes||"", added:toDay(), fu:ymd(fd), lc:null, log:[], fubId:p.fubId, fubSynced:toDay()}; });
         setLeads(function(prev){
           var merged = dedupeLeads([...prev, ...fresh]);   // keep existing, fold matching FUB people in (no duplicates)
           // Persist whenever anything changed — a new lead OR a backfilled field (e.g. fubId)
@@ -1195,7 +1199,7 @@ function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMar
   var todayR = rems.filter(function(r){ return r.date===td && !r.done; });
   var hot = leads.filter(function(l){ return l.temp==="hot"; }).slice(0,5);
   // Live, self-correcting stats derived from real data (no more drifting manual counters).
-  var wkAgo = (function(){ var d=new Date(); d.setDate(d.getDate()-7); return d.toISOString().split("T")[0]; })();
+  var wkAgo = (function(){ var d=new Date(); d.setDate(d.getDate()-7); return ymd(d); })();
   var liveDeals = (deals||[]).filter(function(d){ return !d.dead; });
   var cancelledDeals = (deals||[]).filter(function(d){ return d.dead; });
   var bdays = (leads||[]).filter(function(l){ return l.bday; }).map(function(l){ return {l:l, du:bdayDaysUntil(l)}; }).filter(function(x){ return x.du!==null && x.du>=0 && x.du<=14; }).sort(function(a,b){ return a.du-b.du; });
@@ -1395,7 +1399,7 @@ function PanelCal({rems,leads,setRems,setTab}) {
   var td = toDay();
   var leadName = function(id){ if(!id) return ""; var L=(leads||[]).find(function(x){ return x.id===id; }); return L?L.first+" "+L.last:""; };
   var todays = (rems||[]).filter(function(r){ return r.date===td; }).sort(function(a,b){ return (a.time||"99:99")>(b.time||"99:99")?1:-1; });
-  var tmr = (function(){ var d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().split("T")[0]; })();
+  var tmr = (function(){ var d=new Date(); d.setDate(d.getDate()+1); return ymd(d); })();
   var tmrLabel = (function(){ var d=new Date(); d.setDate(d.getDate()+1); return d.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"}); })();
   var tmrws = (rems||[]).filter(function(r){ return r.date===tmr; }).sort(function(a,b){ return (a.time||"99:99")>(b.time||"99:99")?1:-1; });
   var tdc = {appt:C.ac,follow:C.go,email:C.go,urgent:C.ro,nurture:C.sk,other:C.t3};
@@ -2076,7 +2080,10 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
             <div style={{marginBottom:8}}>
               <div style={{fontSize:11,color:C.t3,marginBottom:4}}>Temperature:</div>
               <div style={{display:"flex",gap:6}}>
-                {["hot","warm","cold"].map(function(t){ return <Btn key={t} style={{fontSize:11}} onClick={function(){ setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,temp:t}:l; }); }); setModal(function(m){ return {...m,temp:t}; }); }}>{TICON[t]} {t}</Btn>; })}
+                {modal.type==="closed"
+                  ? <span style={{fontSize:11,color:C.t3}}>Closed client — no temperature. Won't appear in the daily call block.</span>
+                  : ["hot","warm","cold"].map(function(t){ return <Btn key={t} style={{fontSize:11}} onClick={function(){ setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,temp:t}:l; }); }); setModal(function(m){ return {...m,temp:t}; }); }}>{TICON[t]} {t}</Btn>; })}
+                {modal.type!=="closed" && modal.temp && <Btn style={{fontSize:11}} title="Clear temperature" onClick={function(){ setLeads(function(p){ return p.map(function(l){ return l.id===modal.id?{...l,temp:""}:l; }); }); setModal(function(m){ return {...m,temp:""}; }); }}>✕ clear</Btn>}
               </div>
             </div>
             <div style={{marginBottom:8}}>
@@ -2223,7 +2230,7 @@ function PanelAddLead({addLead,setTab}) {
     if (!firstName && (form.ig||form.tiktok)) firstName = "@"+cleanHandle(form.ig||form.tiktok);
     if (!firstName) { setSt("Add a name — or an Instagram/TikTok username."); return; }
     var fd = new Date(); fd.setDate(fd.getDate()+Number(form.fdays||3));
-    var lead = {id:uid(),...form,first:firstName,ig:cleanHandle(form.ig),tiktok:cleanHandle(form.tiktok),added:toDay(),fu:fd.toISOString().split("T")[0],lc:null,log:[]};
+    var lead = {id:uid(),...form,first:firstName,ig:cleanHandle(form.ig),tiktok:cleanHandle(form.tiktok),added:toDay(),fu:ymd(fd),lc:null,log:[]};
     addLead(lead);
     setSt("Saved. Follow-up: "+fmtDate(lead.fu));
     // ⚡ Speed-to-lead: instantly send a warm intro email via Brevo (tracked) the moment the lead is added.
@@ -2265,8 +2272,8 @@ function PanelAddLead({addLead,setTab}) {
       </Card>
       <Card title="Classification">
         <Row cols="1fr 1fr 1fr 1fr">
-          <Fld label="Type"><select style={inp} value={form.type} onChange={fld("type")}><option value="buyer">Buyer</option><option value="seller">Seller</option><option value="both">Both</option><option value="closed">Closed Client</option></select></Fld>
-          <Fld label="Temperature"><select style={inp} value={form.temp} onChange={fld("temp")}><option value="hot">Hot</option><option value="warm">Warm</option><option value="cold">Cold</option></select></Fld>
+          <Fld label="Type"><select style={inp} value={form.type} onChange={function(e){ var v=e.target.value; setForm(function(p){ return {...p, type:v, temp: v==="closed" ? "" : p.temp}; }); }}><option value="buyer">Buyer</option><option value="seller">Seller</option><option value="both">Both</option><option value="closed">Closed Client</option></select></Fld>
+          <Fld label="Temperature"><select style={{...inp, opacity: form.type==="closed" ? 0.55 : 1}} value={form.temp||""} onChange={fld("temp")} disabled={form.type==="closed"} title={form.type==="closed"?"Closed clients don't carry a temperature — they're out of the call block.":""}><option value="">{form.type==="closed" ? "— n/a, closed client —" : "— none —"}</option><option value="hot">Hot</option><option value="warm">Warm</option><option value="cold">Cold</option></select></Fld>
           <Fld label="Source"><select style={inp} value={form.source} onChange={fld("source")}>{SRCS.map(function(s){ return <option key={s}>{s}</option>; })}</select></Fld>
           <Fld label="Nurture"><select style={inp} value={form.nurture} onChange={fld("nurture")}><option value="active">Active</option><option value="long-term">Long-term</option><option value="drip">Drip</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="none">None</option></select></Fld>
         </Row>
