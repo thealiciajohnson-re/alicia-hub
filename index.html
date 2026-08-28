@@ -1448,15 +1448,66 @@ function PanelCal({rems,leads,setRems,setTab}) {
             ? <div style={{color:C.t3,fontSize:13}}>No brief stored yet. It posts here every morning at 7:15 alongside Slack.</div>
             : <div>
                 {stale && <div style={{fontSize:11,color:C.ro,fontWeight:600,marginBottom:8}}>⚠️ This is from {fmtDate(brief.date)} — today's brief hasn't posted yet.</div>}
-                {brief.startHere && <div style={{background:C.bg2||C.br,borderLeft:"3px solid "+C.ac,padding:"9px 11px",marginBottom:10,borderRadius:4}}>
-                  <div style={{fontSize:10,letterSpacing:"0.08em",color:C.ac,fontWeight:700,marginBottom:3}}>START HERE</div>
-                  <div style={{fontSize:14,fontWeight:600}}>{brief.startHere.name}{brief.startHere.phone && <a href={"tel:"+String(brief.startHere.phone).replace(/[^0-9+]/g,"")} style={{color:C.ac,marginLeft:8,fontSize:13,textDecoration:"none"}}>📞 {brief.startHere.phone}</a>}</div>
-                  {brief.startHere.reason && <div style={{fontSize:12,color:C.t2,marginTop:2}}>{brief.startHere.reason}</div>}
-                </div>}
-                {sb && <div style={{display:"flex",flexWrap:"wrap",gap:14,marginBottom:10,fontSize:11,color:C.t2,fontFamily:"monospace"}}>
-                  <span>Conversations: <b style={{color:C.tx}}>{sb.today}</b> today · <b style={{color:C.tx}}>{sb.last7Days}</b> 7d · <b style={{color:C.tx}}>{sb.monthToDate}</b>{sb.goal?"/"+sb.goal:""} mo</span>
-                  {sb.neverContacted!=null && <span>Never contacted: <b style={{color:C.ro}}>{sb.neverContacted}</b>{sb.total?" of "+sb.total:""}</span>}
-                </div>}
+                {(function(){
+                  // A stored brief is a snapshot. Re-check every name against the
+                  // LIVE leads list so a lead she deleted, closed, or already rang
+                  // today can never still be presented as someone to call.
+                  var list = (brief.calls && brief.calls.length) ? brief.calls
+                           : (brief.startHere ? [brief.startHere] : []);
+                  if(!list.length) return null;
+                  function look(c){
+                    var dig = String(c.phone||"").replace(/\D+/g,"");
+                    return (leads||[]).filter(function(l){
+                      if(dig && String(l.phone||"").replace(/\D+/g,"")===dig) return true;
+                      return ((l.first||"")+" "+(l.last||"")).trim().toLowerCase() === String(c.name||"").trim().toLowerCase();
+                    })[0];
+                  }
+                  var rows = list.map(function(c,i){
+                    var l = look(c), st = null;
+                    if(!l) st = {t:"removed from CRM", c:C.t3, strike:true};
+                    else if(l.type==="closed") st = {t:"closed client", c:C.t3, strike:true};
+                    else if(l.lc===td) st = {t:"✓ already called today", c:C.go, strike:true};
+                    return {c:c,l:l,st:st,i:i};
+                  });
+                  var live = rows.filter(function(r){ return !r.st; });
+                  var head = live[0];
+                  return <div style={{marginBottom:10}}>
+                    {head && <div style={{background:C.bg2||C.br,borderLeft:"3px solid "+C.ac,padding:"9px 11px",marginBottom:8,borderRadius:4}}>
+                      <div style={{fontSize:10,letterSpacing:"0.08em",color:C.ac,fontWeight:700,marginBottom:3}}>START HERE</div>
+                      <div style={{fontSize:14,fontWeight:600}}>{head.c.name}{head.c.phone && <a href={"tel:"+String(head.c.phone).replace(/[^0-9+]/g,"")} style={{color:C.ac,marginLeft:8,fontSize:13,textDecoration:"none"}}>📞 {head.c.phone}</a>}</div>
+                      {head.c.reason && <div style={{fontSize:12,color:C.t2,marginTop:2}}>{head.c.reason}</div>}
+                      {head.c.say && <div style={{fontSize:12,color:C.t2,marginTop:4,fontStyle:"italic"}}>Say: “{head.c.say}”</div>}
+                    </div>}
+                    {rows.filter(function(r){ return r!==head; }).map(function(r,k){
+                      return <div key={k} style={{display:"flex",gap:8,alignItems:"baseline",padding:"4px 0",borderBottom:"1px solid "+C.br}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <span style={{fontSize:12.5,fontWeight:600,textDecoration:r.st&&r.st.strike?"line-through":"none",opacity:r.st?0.55:1}}>{r.c.name}</span>
+                          {!r.st && r.c.phone && <a href={"tel:"+String(r.c.phone).replace(/[^0-9+]/g,"")} style={{color:C.ac,marginLeft:7,fontSize:12,textDecoration:"none"}}>📞 {r.c.phone}</a>}
+                          {r.st && <span style={{fontSize:10.5,color:r.st.c,marginLeft:7}}>({r.st.t})</span>}
+                          {r.c.reason && !r.st && <div style={{fontSize:11.5,color:C.t3}}>{r.c.reason}</div>}
+                        </div>
+                      </div>;
+                    })}
+                    {!live.length && <div style={{fontSize:12,color:C.go,marginTop:6}}>✓ Everyone on this list is handled or no longer in your CRM.</div>}
+                  </div>;
+                })()}
+                {(function(){
+                  // Computed live from leads, never from the stored snapshot, so it
+                  // stays true as she works through the day.
+                  var wk=(function(){var d=new Date(); d.setDate(d.getDate()-6); return ymd(d);})();
+                  var mo=td.slice(0,7)+"-01";
+                  var all=(leads||[]);
+                  var nT=all.filter(function(l){return l.lc===td;}).length;
+                  var n7=all.filter(function(l){return l.lc && l.lc>=wk;}).length;
+                  var nM=all.filter(function(l){return l.lc && l.lc>=mo;}).length;
+                  var nc=all.filter(function(l){return !l.lc;}).length;
+                  var goal=sb && sb.goal;
+                  return <div style={{display:"flex",flexWrap:"wrap",gap:14,marginBottom:10,fontSize:11,color:C.t2,fontFamily:"monospace"}}>
+                    <span>Conversations: <b style={{color:C.tx}}>{nT}</b> today · <b style={{color:C.tx}}>{n7}</b> 7d · <b style={{color:C.tx}}>{nM}</b>{goal?"/"+goal:""} mo</span>
+                    <span>Never contacted: <b style={{color:nc?C.ro:C.go}}>{nc}</b> of {all.length}</span>
+                    <span style={{color:C.t3}}>live</span>
+                  </div>;
+                })()}
                 <div style={{fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",color:C.t2}}>{brief.text}</div>
                 {brief.postedAt && <div style={{fontSize:10,color:C.t3,marginTop:9}}>posted {new Date(brief.postedAt).toLocaleString("en-US",{hour:"numeric",minute:"2-digit",month:"short",day:"numeric"})}</div>}
               </div>}
