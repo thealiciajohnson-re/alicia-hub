@@ -805,7 +805,7 @@ function App() {
           {tab==="social"    && <PanelSocial {...pp} />}
           {tab==="mktgemail" && <PanelMktgEmail {...pp} />}
           {tab==="aiemail"   && <PanelAIEmail leads={leads} />}
-          {tab==="mojo"      && <PanelMojo leads={leads} />}
+          {tab==="mojo"      && <PanelMojo leads={leads} setLeads={setLeads} />}
           {tab==="rs"        && <PanelRS {...pp} />}
           {tab==="selleralerts" && <PanelSellerAlerts {...pp} />}
           {tab==="anniv"     && <PanelAnniv {...pp} />}
@@ -3432,11 +3432,54 @@ function PanelAIEmail({leads}) {
 }
 
 /* ── MOJO ────────────────────────────────────────────────────── */
-function PanelMojo({leads}) {
+function PanelMojo({leads,setLeads}) {
   var [seg,setSeg] = useState("prospectsNew");
   var [st,setSt] = useState(""); var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
+  var [imp,setImp] = useState(null); var [impMsg,setImpMsg] = useState("");
   function runAI(p){ setAL(true); callAI(p).then(function(t){ setAT(t); setAL(false); }); }
   var L = leads||[];
+  // ── Import call results from a Mojo CSV export ──
+  function ph10(s){ var d=String(s==null?"":s).replace(/\D/g,""); return d.length>10?d.slice(-10):d; }
+  function p2(n){ n=String(n); return n.length<2?"0"+n:n; }
+  function toYMD(s){ if(!s) return ""; var m=String(s).match(/(\d{1,4})[\/\-.](\d{1,2})[\/\-.](\d{1,4})/); if(!m) return ""; var a=m[1],b=m[2],c=m[3],y,mo,d; if(a.length===4){ y=+a;mo=+b;d=+c; } else { mo=+a;d=+b;y=+(c.length===2?("20"+c):c); } if(!y||!mo||!d||mo>12) return ""; return y+"-"+p2(mo)+"-"+p2(d); }
+  function parseCSV(text){ var rows=[],row=[],cur="",q=false; text=String(text).replace(/\r\n/g,"\n").replace(/\r/g,"\n"); for(var i=0;i<text.length;i++){ var ch=text[i]; if(q){ if(ch=='"'){ if(text[i+1]=='"'){cur+='"';i++;} else q=false; } else cur+=ch; } else { if(ch=='"') q=true; else if(ch==','){ row.push(cur); cur=""; } else if(ch=='\n'){ row.push(cur); rows.push(row); row=[]; cur=""; } else cur+=ch; } } if(cur!==""||row.length){ row.push(cur); rows.push(row); } return rows; }
+  // Priority by REGEX order (first regex that matches any header wins), not column order.
+  function findCol(hs,res){ for(var j=0;j<res.length;j++){ for(var i=0;i<hs.length;i++){ if(res[j].test(String(hs[i]).toLowerCase())) return i; } } return -1; }
+  function handleCSV(text){
+    var rows=parseCSV(text).filter(function(r){ return r.some(function(c){ return String(c).trim(); }); });
+    if(rows.length<2){ setImpMsg("That file looks empty. Export a calling list from Mojo and try again."); setImp(null); return; }
+    var hs=rows[0].map(function(h){ return String(h).trim(); });
+    // Every phone/mobile column (Mojo has Primary Phone + Phone 1-10 + Mobile 1-10); exclude the "…Label" columns.
+    var phoneIdxs=[]; hs.forEach(function(h,i){ var t=String(h).toLowerCase(); if(/phone|mobile|\bcell\b|\bnumber\b/.test(t) && !/label|agent|attorney|office|broker|manager/.test(t)) phoneIdxs.push(i); });
+    var dispIdx=findCol(hs,[/last call result/,/call result/,/disposition/,/outcome/,/result/]);
+    var noteIdx=findCol(hs,[/^notes?$/,/notes?/,/remark/,/comment/,/memo/]);
+    var dateIdx=findCol(hs,[/last contacted date/,/last contact/,/last dial date/,/call.?date/,/status change date/,/date/]);
+    if(!phoneIdxs.length){ setImpMsg("Couldn't find a phone column in that file. Send Claude the header row and it'll map it."); setImp(null); return; }
+    var phMap={}; L.forEach(function(l){ [l.phone,l.phone2].forEach(function(pp){ var k=ph10(pp); if(k.length===10 && !phMap[k]) phMap[k]=l; }); });
+    var matched=[], seen={}, unmatched=0;
+    rows.slice(1).forEach(function(r){
+      var nums={}; phoneIdxs.forEach(function(idx){ var k=ph10(r[idx]); if(k.length===10) nums[k]=1; });
+      if(!Object.keys(nums).length) return;
+      var lead=null; for(var k in nums){ if(phMap[k]){ lead=phMap[k]; break; } }
+      if(!lead){ unmatched++; return; }
+      if(seen[lead.id]) return;
+      var disp=dispIdx>=0?String(r[dispIdx]||"").trim():"", date=dateIdx>=0?toYMD(r[dateIdx]):"", note=noteIdx>=0?String(r[noteIdx]||"").trim():"";
+      var hasActivity=(disp && disp.toLowerCase()!=="n/a" && disp.toLowerCase()!=="none") || !!date;
+      if(!hasActivity) return;   // in your Hub but no real call to log — skip, don't touch it
+      seen[lead.id]=true;
+      matched.push({lead:lead, disp:disp, note:note, date:date});
+    });
+    setImp({headers:hs, cols:{phoneCount:phoneIdxs.length,dispIdx:dispIdx,noteIdx:noteIdx,dateIdx:dateIdx}, matched:matched, unmatched:unmatched, total:rows.length-1});
+    setImpMsg("");
+  }
+  function onFile(e){ var f=e.target.files&&e.target.files[0]; if(!f) return; var rd=new FileReader(); rd.onload=function(){ try{ handleCSV(String(rd.result||"")); }catch(err){ setImpMsg("Couldn't read that file — make sure it's a CSV from Mojo."); } }; rd.readAsText(f); e.target.value=""; }
+  function applyImport(){
+    if(!imp||!imp.matched.length) return;
+    var byId={}; imp.matched.forEach(function(m){ byId[m.lead.id]=m; });
+    setLeads(function(p){ return p.map(function(l){ var m=byId[l.id]; if(!m) return l; var when=m.date||toDay(); var line=when+" — 📞 Mojo: "+(m.disp||"call logged")+(m.note?" — "+m.note:""); return {...l, lc:when, mojoResult:m.disp||l.mojoResult||"", mojoResultDate:when, log:[...(l.log||[]),line]}; }); });
+    setImpMsg("✓ Logged "+imp.matched.length+" call result"+(imp.matched.length>1?"s":"")+" — updated last-contact + added a note on each lead."+(imp.unmatched?" "+imp.unmatched+" row"+(imp.unmatched>1?"s":"")+" didn't match a Hub lead by phone.":""));
+    setImp(null);
+  }
   // Segments she'd load into Mojo to cold-call.
   var SEGS = [
     ["prospectsNew","New prospects to call — foreclosure / expired / FSBO not yet contacted", function(l){ return l.prospect && l.prospect!=="lost" && !l.contacted; }],
@@ -3487,8 +3530,26 @@ function PanelMojo({leads}) {
         {st && <div style={{fontSize:12,color:C.ac,marginTop:8}}>{st}</div>}
       </Card>
 
-      <Card title="📥 Bring your Mojo calls back into the Hub — coming soon">
-        <div style={{fontSize:12.5,color:C.t2,lineHeight:1.5}}>Next step: after you dial in Mojo, export your calling list (with your call results/notes) and drop it here — the Hub will match each person by phone and log the outcome + last-contact date onto their lead. To set this up, export one list from Mojo and send Claude the column headers so it maps correctly.</div>
+      <Card title="📥 Bring your Mojo calls back into the Hub">
+        <div style={{fontSize:12.5,color:C.t2,lineHeight:1.5,marginBottom:8}}>After you dial in Mojo, <b>export your calling list</b> (with your call results/notes) and drop the CSV here. The Hub matches each person by <b>phone</b> and logs the outcome + last-contact date onto their lead. Nothing changes until you review and confirm.</div>
+        <input type="file" accept=".csv,text/csv" onChange={onFile} style={{fontSize:12,marginBottom:6}} />
+        {imp && <div style={{marginTop:6}}>
+          <div style={{fontSize:12,color:C.t2,marginBottom:6}}>Detected — matching on <b>{imp.cols.phoneCount} phone column{imp.cols.phoneCount>1?"s":""}</b>{imp.cols.dispIdx>=0?<span> · result: <b>{imp.headers[imp.cols.dispIdx]}</b></span>:null}{imp.cols.noteIdx>=0?<span> · notes: <b>{imp.headers[imp.cols.noteIdx]}</b></span>:null}{imp.cols.dateIdx>=0?<span> · date: <b>{imp.headers[imp.cols.dateIdx]}</b></span>:null}</div>
+          <div style={{fontSize:13,fontWeight:600,marginBottom:6}}>✅ {imp.matched.length} of {imp.total} rows matched a Hub lead{imp.unmatched?" · "+imp.unmatched+" didn't match by phone":""}</div>
+          {imp.matched.length>0 && <div style={{overflowX:"auto",marginBottom:8}}>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:420,fontSize:12}}>
+              <thead><tr>{["Lead","Result","Note","Date"].map(function(h){ return <th key={h} style={{textAlign:"left",fontSize:10,textTransform:"uppercase",color:C.t3,padding:"3px 6px",borderBottom:"1px solid "+C.br}}>{h}</th>; })}</tr></thead>
+              <tbody>{imp.matched.slice(0,8).map(function(m,i){ return <tr key={i}><td style={{padding:"3px 6px"}}>{m.lead.first} {m.lead.last}</td><td style={{padding:"3px 6px"}}>{m.disp||"—"}</td><td style={{padding:"3px 6px",color:C.t3}}>{m.note||"—"}</td><td style={{padding:"3px 6px",fontFamily:"monospace",color:C.t3}}>{m.date?fmtDate(m.date):"today"}</td></tr>; })}</tbody>
+            </table>
+            {imp.matched.length>8 && <div style={{fontSize:11,color:C.t3,padding:"2px 6px"}}>+ {imp.matched.length-8} more…</div>}
+          </div>}
+          <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+            {imp.matched.length>0 && <Btn v="primary" onClick={applyImport}>✓ Log {imp.matched.length} call result{imp.matched.length>1?"s":""} to my leads</Btn>}
+            <Btn onClick={function(){ setImp(null); setImpMsg(""); }}>Cancel</Btn>
+          </div>
+          {imp.matched.length===0 && <div style={{fontSize:11.5,color:C.go,marginTop:6}}>No phone matches — these Mojo contacts aren't in your Hub yet, or the phone formats differ. Send Claude the file's header row if the columns look wrong above.</div>}
+        </div>}
+        {impMsg && <div style={{fontSize:12,color:C.ac,marginTop:8,lineHeight:1.5}}>{impMsg}</div>}
       </Card>
 
       <Card title="🎯 AI cold-call helpers">
