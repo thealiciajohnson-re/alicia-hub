@@ -3436,6 +3436,8 @@ function PanelMojo({leads,setLeads}) {
   var [seg,setSeg] = useState("watchlist");
   var [st,setSt] = useState(""); var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
   var [imp,setImp] = useState(null); var [impMsg,setImpMsg] = useState(""); var [impMode,setImpMode] = useState("add");
+  var [etmpl,setEtmpl] = useState("expired"); var [ecopy,setEcopy] = useState("");
+  function copyText(txt,label){ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(function(){ setEcopy("✓ "+label+" copied — paste it into Mojo."); }, function(){ setEcopy("Couldn't copy automatically."); }); } }
   function cell(r,i){ return i>=0 ? String(r[i]==null?"":r[i]).trim() : ""; }
   function runAI(p){ setAL(true); callAI(p).then(function(t){ setAT(t); setAL(false); }); }
   var L = leads||[];
@@ -3564,6 +3566,20 @@ function PanelMojo({leads,setLeads}) {
     setSt("⬇ Downloaded "+picked.length+" leads. In Mojo: Data → Import → upload this file → map the columns.");
   }
   var noPhone = picked.filter(function(l){ return !(l.phone||l.phone2); }).length;
+  var SIG = "Warm regards,\nAlicia Johnson\nREALTOR® · Excellerate Real Estate\n707-849-6775 · alicia@excelleraterealestate.com\nthealiciajohnsonhomes.com · DRE #02272644";
+  var SIG_HTML = '<table cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;margin-top:10px;"><tr><td style="padding-right:14px;vertical-align:top;"><img src="https://thealiciajohnsonhomes.com/images/alicia-headshot.jpg" alt="Alicia Johnson, Excellerate Real Estate" width="64" height="108" style="border-radius:6px;display:block;"></td><td style="vertical-align:top;font-size:13px;color:#333;line-height:1.5;"><strong style="font-size:15px;color:#1a1a1a;">Alicia Johnson</strong><br>REALTOR® · Excellerate Real Estate<br>707-849-6775 · <a href="mailto:alicia@excelleraterealestate.com" style="color:#2a5a8c;">alicia@excelleraterealestate.com</a><br><a href="https://thealiciajohnsonhomes.com" style="color:#2a5a8c;">thealiciajohnsonhomes.com</a> · DRE #02272644</td></tr></table>';
+  var EMAILS = [
+    {k:"expired", name:"🎯 Expired post-mortem", subj:"Your home on [Property Address] — what I'd change",
+     alts:["The 4 reasons homes like yours don't sell","About [Property Address]"],
+     body:"Hi [First Name],\n\nI noticed your home on [Property Address] came off the market without selling.\n\nI'm not writing to ask for the listing. I put together a short breakdown of the four things I look for when a good home doesn't sell — presentation, showing access, where the price started, and whether it ever moved. It takes about two minutes to read.\n\n👉 See the four reasons: https://thealiciajohnsonhomes.com/postmortem\n\nOne of them is usually the whole story. If you read it and want the honest version for your specific house, text me and we'll walk it together before it goes back on."},
+    {k:"foreclosure", name:"🏚️ Pre-foreclosure", subj:"[First Name], you have more options than you think",
+     body:"Hi [First Name],\n\nReaching out about your situation at [Property Address] may feel unexpected, so I'll keep this simple: you likely have more options than you've been told, and there's still time to protect your equity.\n\nI help Sonoma County homeowners in tough spots find the right path — whether that's selling quickly on your terms or connecting you with the right resources before things move further. Either way, you stay in control.\n\nI'd be glad to talk it through privately and lay out your options. Would a short call this week work for you?"},
+    {k:"fsbo", name:"🪧 For Sale By Owner", subj:"Selling [Property Address] yourself — a few numbers that'll help",
+     body:"Hi [First Name],\n\nI saw you're selling your home at [Property Address] on your own — good for you, that takes real work. Plenty of sellers do great on their own; some just want a second set of eyes.\n\nEither way, I'm happy to be a resource. If it helps, I can send you the recent [City] sales your buyers will be comparing you to, so you're priced right and negotiating from strength.\n\nWant me to send those over? They're the same numbers I pull for my own listings in your neighborhood every month."},
+    {k:"intro", name:"👋 Seller intro", subj:"Thinking about selling in [City]?",
+     body:"Hi [First Name],\n\nI'm Alicia Johnson with Excellerate Real Estate — I sell homes right here in [City] and across Sonoma County, and I wanted to introduce myself in case a move is on your mind.\n\nThe market has shifted, and what your home is worth today might surprise you. If you're curious, I'll put together a real, current value for your home — the same detailed analysis I give every client before we list.\n\nJust reply and I'll get it started. And if the timing isn't right, I'm always glad to be your go-to for anything real estate."}
+  ];
+  var curEmail = EMAILS.filter(function(e){ return e.k===etmpl; })[0] || EMAILS[0];
   return (
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>Mojo Dialer</div>
@@ -3619,6 +3635,31 @@ function PanelMojo({leads,setLeads}) {
           <Btn onClick={function(){ runAI("Give me 5 concise objection handlers for Sonoma County real estate cold calls: 'not interested', 'already have an agent', 'bad time', 'just going to relist myself', 'not selling'. One or two sentences each, warm and confident."); }}>Objection handlers</Btn>
         </div>
         <AIBox text={aiTxt} loading={aiLd} />
+      </Card>
+
+      <Card title="✉️ Mojo email templates">
+        <div style={{fontSize:12.5,color:C.t2,lineHeight:1.5,marginBottom:8}}>Ready-to-paste emails in your voice. Copy the subject + body into a Mojo email template, then use Mojo's <b>Personalize</b> button to swap the <b>[First Name]</b>, <b>[Property Address]</b>, and <b>[City]</b> placeholders for Mojo's merge fields. Paste the signature once.</div>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>
+          {EMAILS.map(function(e){ return <Btn key={e.k} v={etmpl===e.k?"primary":"def"} style={{fontSize:11}} onClick={function(){ setEtmpl(e.k); setEcopy(""); }}>{e.name}</Btn>; })}
+        </div>
+        <div style={{fontSize:11,color:C.t3,marginBottom:2}}>Subject line</div>
+        <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
+          <input readOnly value={curEmail.subj} style={{...inp,fontSize:12,flex:1,minWidth:220}} onFocus={function(e){ e.target.select(); }} />
+          <Btn style={{fontSize:11}} onClick={function(){ copyText(curEmail.subj,"Subject"); }}>📋 Copy subject</Btn>
+        </div>
+        {curEmail.alts && <div style={{fontSize:11,color:C.t3,marginBottom:8,lineHeight:1.6}}>🔁 Rotate — don't reuse one subject on a list. Also try: {curEmail.alts.map(function(s,i){ return <span key={i}>{i>0?" · ":""}<span style={{cursor:"pointer",color:C.ac,fontWeight:600}} onClick={function(){ copyText(s,"Subject"); }} title="Copy this subject">{s} 📋</span></span>; })}</div>}
+        <div style={{fontSize:11,color:C.t3,marginBottom:2}}>Body</div>
+        <textarea readOnly value={curEmail.body} style={{...inp,fontSize:12.5,minHeight:170,lineHeight:1.5,resize:"vertical",marginBottom:6}} onFocus={function(e){ e.target.select(); }} />
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+          <Btn v="primary" style={{fontSize:11}} onClick={function(){ copyText(curEmail.body,"Body"); }}>📋 Copy body</Btn>
+          <Btn v="gold" style={{fontSize:11}} onClick={function(){ copyText(curEmail.body+"\n\n"+SIG,"Body + signature"); }}>📋 Copy body + signature</Btn>
+        </div>
+        <div style={{fontSize:11,color:C.t3,marginBottom:2}}>Your signature <span style={{color:C.t3}}>— plain text (works everywhere) or HTML with your headshot (if Mojo allows HTML)</span></div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <Btn style={{fontSize:11}} onClick={function(){ copyText(SIG,"Text signature"); }}>📋 Copy text signature</Btn>
+          <Btn style={{fontSize:11}} onClick={function(){ copyText(SIG_HTML,"HTML headshot signature"); }}>📋 Copy headshot signature (HTML)</Btn>
+        </div>
+        {ecopy && <div style={{fontSize:12,color:C.ac,marginTop:8}}>{ecopy}</div>}
       </Card>
     </div>
   );
