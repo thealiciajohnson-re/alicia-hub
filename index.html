@@ -126,7 +126,7 @@ const AGENT = {
 const BREVO_SENDER = "alicia@thealiciajohnsonhomes.com";
 
 // Bump this whenever the hub is updated, so you can confirm you're viewing the latest file.
-const BUILD = "Jul 2 · build 7";
+const BUILD = "Jul 2 · build 8";
 
 const TICON = { hot:"🔥", warm:"🌤", cold:"❄️" };
 const NLBL = { active:"Active","long-term":"Long-term",drip:"Drip",monthly:"Monthly",quarterly:"Quarterly",none:"None" };
@@ -135,6 +135,8 @@ const NLBL = { active:"Active","long-term":"Long-term",drip:"Drip",monthly:"Mont
 const NURDAYS = { biweekly:14, monthly:30 };
 const NURLBL  = { off:"Off", biweekly:"Every 2 weeks", monthly:"Monthly" };
 function nurtureOn(l){ return l && l.autoNurture && l.autoNurture!=="off" && NURDAYS[l.autoNurture]; }
+// 📬 Monthly "what sold near you" email (last day of month). ON by default for anyone with an email + street address; soldMonthly:false switches it off.
+function soldReportOn(l){ if(!l||l.soldMonthly===false) return false; var e=(l.email||"").trim(), a=(l.addr||"").trim(); return e.indexOf("@")>0 && !/noemail/i.test(e) && /^\d+\s+\S/.test(a); }
 function nurtureDue(l){
   if (!nurtureOn(l)) return false;
   if (!l.lastNurtured) return true;
@@ -1556,7 +1558,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
   var [fuNote,setFuNote] = useState("");
   var [fuRepeat,setFuRepeat] = useState("none");
   var [fuMsg,setFuMsg] = useState("");
-  var [srch,setSrch] = useState(""); var [fT,setFT] = useState(""); var [fTp,setFTp] = useState(""); var [fS,setFS] = useState(""); var [fSit,setFSit] = useState("");
+  var [srch,setSrch] = useState(""); var [fT,setFT] = useState(""); var [fTp,setFTp] = useState(""); var [fS,setFS] = useState(""); var [fSit,setFSit] = useState(""); var [fSold,setFSold] = useState("");
   var [sortKey,setSortKey] = useState(""); var [sortDir,setSortDir] = useState(1);
   var [modal,setModal] = useState(null); var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
   var [modalPlan,setModalPlan] = useState("");
@@ -1744,7 +1746,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     // All foreclosure/auction leads are auto-captured; expireds are auto only when they carry an MLS number.
     if (hideFromLeads(l)) return false;  // NEW auto-captured prospects + lost leads live in the Watchlist, not All Leads
     var q = (l.first+" "+l.last+" "+l.phone+" "+l.email+" "+(l.phone2||"")+" "+(l.email2||"")+" "+(l.addr||"")+" "+(l.addr2||"")).toLowerCase();
-    return (!srch||q.includes(srch.toLowerCase())) && (!fT||l.type===fT) && (!fTp||l.temp===fTp) && (!fS||l.source===fS) && (!fSit||hasSit(l,fSit));
+    return (!srch||q.includes(srch.toLowerCase())) && (!fT||l.type===fT) && (!fTp||l.temp===fTp) && (!fS||l.source===fS) && (!fSit||hasSit(l,fSit)) && (!fSold || (fSold==="on"?soldReportOn(l):!soldReportOn(l)));
   });
   var TEMPRANK = {hot:0,warm:1,cold:2};
   var NURRANK = {active:0,"long-term":1,drip:2,monthly:3,quarterly:4,none:5};
@@ -1916,6 +1918,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
           <select style={{...inp,width:110}} value={fTp} onChange={function(e){ setFTp(e.target.value); }}><option value="">All temps</option><option value="hot">Hot</option><option value="warm">Warm</option><option value="cold">Cold</option></select>
           <select style={{...inp,width:125}} value={fS} onChange={function(e){ setFS(e.target.value); }}><option value="">All sources</option>{SRCS.map(function(s){ return <option key={s}>{s}</option>; })}</select>
           <select style={{...inp,width:135}} value={fSit} onChange={function(e){ setFSit(e.target.value); }}><option value="">All situations</option>{SITUATIONS.filter(function(s){ return s[0]; }).map(function(s){ return <option key={s[0]} value={s[0]}>{s[1]}</option>; })}</select>
+          <select style={{...inp,width:150}} value={fSold} onChange={function(e){ setFSold(e.target.value); }} title="Monthly sold report list"><option value="">📬 Sold report: all</option><option value="on">📬 On the list</option><option value="off">Not on the list</option></select>
         </div>
       </Card>
       {filtered.length===0 ? (
@@ -1934,7 +1937,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br}}><Tag t={l.type}>{l.type}</Tag></td>
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br}}><Tag t={l.temp}>{TICON[l.temp]} {l.temp}</Tag></td>
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br,fontSize:12,color:C.t2}}>{l.source}</td>
-                    <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br,fontSize:12,color:C.t2}}>{NLBL[l.nurture]||l.nurture}{nurtureOn(l)?<span title={"Auto-nurture: "+NURLBL[l.autoNurture]+(nurtureDue(l)?" (due now)":"")} style={{marginLeft:4,color:nurtureDue(l)?C.go:C.t3}}>🔄</span>:null}</td>
+                    <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br,fontSize:12,color:C.t2}}>{NLBL[l.nurture]||l.nurture}{nurtureOn(l)?<span title={"Auto-nurture: "+NURLBL[l.autoNurture]+(nurtureDue(l)?" (due now)":"")} style={{marginLeft:4,color:nurtureDue(l)?C.go:C.t3}}>🔄</span>:null}{soldReportOn(l)?<span title="On the monthly sold report (what sold near their home, last day of each month)" style={{marginLeft:4}}>📬</span>:null}</td>
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br,fontSize:11,fontFamily:"monospace",color:l.fu<=toDay()?C.ro:C.t3}}>{fmtDate(l.fu)}</td>
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br}}>
                       <div style={{display:"flex",gap:5,justifyContent:"flex-end"}}>
@@ -2006,6 +2009,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                 <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:4}}>
                   <Btn v={modal.hvMonthly?"primary":"def"} style={{fontSize:10,padding:"3px 9px"}} title="Monthly home-value estimate email" onClick={function(){ saveContact("hvMonthly", !modal.hvMonthly); }}>{modal.hvMonthly?"📈 Monthly value ✓":"📈 Monthly value"}</Btn>
                   <Btn v={modal.neighborAlert?"primary":"def"} style={{fontSize:10,padding:"3px 9px"}} title="Nearby listing-activity emails" onClick={function(){ saveContact("neighborAlert", !modal.neighborAlert); }}>{modal.neighborAlert?"🏘️ Neighborhood ✓":"🏘️ Neighborhood"}</Btn>
+                  <Btn v={soldReportOn(modal)?"primary":"def"} style={{fontSize:10,padding:"3px 9px"}} title="Monthly 'what sold near you' email — MLS closed sales near their home, sent the last day of each month. On by default for anyone with an email + street address." onClick={function(){ saveContact("soldMonthly", modal.soldMonthly===false ? true : false); }}>{soldReportOn(modal)?"📬 Sold report ✓":(modal.soldMonthly===false?"📬 Sold report (off)":"📬 Sold report (needs email + address)")}</Btn>
                 </div>
                 {(modal.hvMonthly||modal.neighborAlert) && !(modal.addr||"").trim() && <div style={{fontSize:10,color:"#b26a00",marginBottom:6}}>⚠️ Add a full street address above — these emails need it to work.</div>}
                 <div style={{fontSize:12,color:C.t2,marginTop:4}}>Timeline: {modal.timeline}</div>
