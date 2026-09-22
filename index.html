@@ -581,8 +581,8 @@ function App() {
   const [leads, setLeads] = useState([]);
   const [rems, setRems] = useState([]);
   const [deals, setDeals] = useState([]);
-  const [goals, setGoals] = useState({leads:10,appts:5,listings:2,closed:1,calls:50,offers:2});
-  const [act, setAct] = useState({leads:44,appts:2,listings:2,closed:0,calls:0,offers:0});
+  const [goals, setGoals] = useState({leads:10,appts:5,listings:2,closed:1,calls:50,contacts:20,offers:2});
+  const [act, setAct] = useState({leads:44,appts:2,listings:2,closed:0,calls:0,contacts:0,offers:0});
   const [scores, setScores] = useState({calls:0,contacts:0,appts:0,listings:0,offers:0,closings:0});
   const [txs, setTxs] = useState([]);
   const [oh, setOh] = useState([]);
@@ -744,7 +744,7 @@ function App() {
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"mojo",l:"Mojo Dialer"},{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"cma",l:"🏷️ CMA / Comps"},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
-    {s:"Business",items:[{id:"roadmap",l:"📋 Roadmap"},{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"},{id:"score",l:"Scorecard"}]}
+    {s:"Business",items:[{id:"roadmap",l:"📋 Roadmap"},{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"}]}
   ];
 
   const pp = {leads,rems,deals,act,goals,scores,txs,oh,enrolled,listings,setListings,market,setMarket,social,setSocial,cmas,setCmas,setTab,setLeads,setRems,setDeals,setGoals,setAct,setScores,setTxs,setOh,setEnrolled,addLead,focusLead,setFocusLead,pullFromFub,dismissLead};
@@ -822,7 +822,6 @@ function App() {
           {tab==="rates"     && <PanelRates {...pp} />}
           {tab==="market"    && <PanelMarket {...pp} />}
           {tab==="goals"     && <PanelGoals {...pp} />}
-          {tab==="score"     && <PanelScore {...pp} />}
         </main>
       </div>
     </div>
@@ -930,11 +929,18 @@ function PanelRoadmap({rems,setRems,setTab}) {
 
 /* ── EXPIRED / FSBO WATCHLIST ────────────────────────────────── */
 /* ── CMA / COMPS ─────────────────────────────────────────────── */
-function PanelCMA({cmas,setCmas}) {
+function PanelCMA({cmas,setCmas,leads,setLeads}) {
   function blankComp(){ return {addr:"",beds:"",baths:"",sqft:"",lot:"",status:"sold",dist:"",price:"",dom:"",sold:""}; }
   var BLANK = {id:"",subject:{addr:"",beds:"",baths:"",sqft:"",lot:"",condition:""},comps:[blankComp(),blankComp(),blankComp()],commission:5,costs:1.5,saved:""};
   var [c,setC] = useState(BLANK);
   var [msg,setMsg] = useState("");
+  var [leadId,setLeadId] = useState("");
+  var sellers = (leads||[]).filter(function(l){ return (l.type==="seller"||l.type==="both") && !l.prospect; });
+  function pickLead(e){
+    var id=e.target.value; setLeadId(id);
+    var L=(leads||[]).find(function(x){ return x.id===id; });
+    if(L){ if(L.cma){ setC(L.cma); setMsg("📂 Loaded "+(L.first||"")+"'s saved CMA."); } else { setC(function(p){ return {...p, subject:{...p.subject, addr:(p.subject.addr||L.addr||"")}}; }); setMsg("New CMA for "+(L.first||"")+" "+(L.last||"")+" — fill it in and Save."); } }
+  }
   function num(x){ var n=parseFloat(String(x==null?"":x).replace(/[^0-9.]/g,"")); return isFinite(n)?n:0; }
   function fmt(n){ return n>0 ? "$"+Math.round(n).toLocaleString() : "—"; }
   function setSubj(f,v){ setC(function(p){ return {...p,subject:{...p.subject,[f]:v}}; }); }
@@ -963,9 +969,12 @@ function PanelCMA({cmas,setCmas}) {
 
   function saveCMA(){
     if(!c.subject.addr.trim()){ setMsg("⚠️ Add the subject property address first."); return; }
-    var rec = {...c,id:c.id||uid(),saved:toDay(),suggest:Math.round(suggest)};
+    if(!leadId){ setMsg("⚠️ Pick which lead this CMA is for (top of page) so it saves to their record."); return; }
+    var L=(leads||[]).find(function(x){ return x.id===leadId; });
+    var rec = {...c,id:c.id||uid(),saved:toDay(),suggest:Math.round(suggest),leadId:leadId,leadName:(L?((L.first||"")+" "+(L.last||"")).trim():"")};
     setCmas(function(p){ var o=(p||[]).filter(function(x){return x.id!==rec.id;}); return [rec,...o]; });
-    setC(rec); setMsg("✓ Saved — see it under Saved CMAs below. It syncs across your devices.");
+    if(setLeads) setLeads(function(p){ return p.map(function(l){ return l.id===leadId?{...l,cma:rec,cmaDate:toDay()}:l; }); });
+    setC(rec); setMsg("✓ Saved to "+(L?(L.first+" "+L.last):"the lead")+" — it's on their lead record and under Saved CMAs.");
   }
   function loadCMA(rec){ setC(rec); setMsg("Loaded: "+(rec.subject.addr||"CMA")); }
   function delCMA(id){ if(typeof window!=="undefined"&&window.confirm&&!window.confirm("Delete this saved CMA?"))return; setCmas(function(p){ return (p||[]).filter(function(x){return x.id!==id;}); }); }
@@ -992,6 +1001,14 @@ function PanelCMA({cmas,setCmas}) {
         </div>
       </div>
       <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:720}}>Put in the listing address + 3 comps, mark each <b>Sold</b> or <b>On market</b>, and it works out the price-per-sqft and a suggested value range. The value anchors on your <b>sold</b> comps; active listings show the competition. <b>Tip:</b> pull your <b>BAREIS sold comps</b> for the real numbers — this does the math.</div>
+
+      <Card style={{marginBottom:10}}>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <span style={{fontSize:12,color:C.t3}}>CMA for lead:</span>
+          <select style={{...inp,width:220,fontSize:12}} value={leadId} onChange={pickLead}><option value="">— select a lead —</option>{sellers.map(function(l){ return <option key={l.id} value={l.id}>{l.first} {l.last}{l.cma?" 🏷️":""}</option>; })}</select>
+          {leadId ? <span style={{fontSize:11,color:C.ac}}>Saving attaches this CMA to their lead record.</span> : <span style={{fontSize:11,color:C.t3}}>Pick a lead so the CMA saves to them.</span>}
+        </div>
+      </Card>
 
       <Card title="Subject property (the home you're pricing)">
         <input style={{...inp,marginBottom:8}} placeholder="Address — e.g. 250 Maple Ave, Kenwood, CA 95452" value={c.subject.addr} onChange={function(e){ setSubj("addr",e.target.value); }} />
@@ -1050,7 +1067,7 @@ function PanelCMA({cmas,setCmas}) {
             <div key={rec.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid "+C.br}}>
               <div style={{flex:1}}>
                 <div style={{fontSize:13,fontWeight:600}}>{rec.subject.addr||"(no address)"}</div>
-                <div style={{fontSize:11,color:C.t3}}>{rec.suggest?"Suggested "+fmt(rec.suggest):""}{rec.saved?" · saved "+fmtDate(rec.saved):""}</div>
+                <div style={{fontSize:11,color:C.t3}}>{rec.leadName?"👤 "+rec.leadName+" · ":""}{rec.suggest?"Suggested "+fmt(rec.suggest):""}{rec.saved?" · saved "+fmtDate(rec.saved):""}</div>
               </div>
               <Btn onClick={function(){ loadCMA(rec); }} style={{fontSize:10,padding:"3px 8px"}}>Open</Btn>
               <Btn v="rose" onClick={function(){ delCMA(rec.id); }} style={{fontSize:10,padding:"3px 8px"}}>🗑</Btn>
@@ -3828,7 +3845,7 @@ function PanelSellerAlerts({leads,setLeads,market}) {
       })
       .catch(function(){ setMktBusy(false); setMktMsg("⚠️ Couldn't reach the market service."); });
   }
-  var sellers = leads.filter(function(l){ return l.type==="seller"||l.type==="both"; });
+  var sellers = leads.filter(function(l){ return (l.type==="seller"||l.type==="both") && !l.prospect; });
   var activeA = sellers.filter(function(l){ return l.sellerAlert; });
   var pending = sellers.filter(function(l){ return !l.sellerAlert; });
   var list = view==="pending"?pending:view==="active"?activeA:sellers;
@@ -4046,7 +4063,7 @@ function PanelNet({leads,setLeads}) {
     var L=(leads||[]).find(function(x){ return x.id===leadId; });
     setSaveMsg("✓ Saved to "+(L?L.first+" "+L.last:"lead")+".");
   }
-  var sellers = (leads||[]).filter(function(l){ return l.type==="seller"||l.type==="both"; });
+  var sellers = (leads||[]).filter(function(l){ return (l.type==="seller"||l.type==="both") && !l.prospect; });
   var curLead = (leads||[]).find(function(x){ return x.id===leadId; });
   function resetSheet(){ setV(DEF); setParties([]); setSaveMsg("Reset to a blank sheet — change values and Save to overwrite."); }
   function addParty(){ setParties(function(p){ return [...p,{name:"",pct:""}]; }); }
@@ -4707,7 +4724,7 @@ function PanelMarket({market,setMarket}) {
 function PanelGoals({goals,act,setGoals,setAct,deals}) {
   var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
   var cancelled = (deals||[]).filter(function(d){ return d.dead; });
-  var ITEMS = [["leads","New Leads"],["appts","Appointments"],["listings","New Listings"],["closed","Closed Deals"],["calls","Calls Made"],["offers","Offers Written"]];
+  var ITEMS = [["leads","New Leads"],["appts","Appointments"],["listings","New Listings"],["closed","Closed Deals"],["calls","Calls Made"],["contacts","Contacts Made"],["offers","Offers Written"]];
   var conv = act.leads>0 ? Math.round(act.appts/act.leads*100) : 0;
   var gci = (act.listings*715000*0.025)+(act.closed*715000*0.025);
   var sc = ITEMS.map(function(x){ return goals[x[0]] ? Math.min(1,act[x[0]]/goals[x[0]]) : 0; });
@@ -4737,41 +4754,7 @@ function PanelGoals({goals,act,setGoals,setAct,deals}) {
   );
 }
 
-/* ── SCORECARD ───────────────────────────────────────────────── */
-function PanelScore({scores,setScores}) {
-  var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
-  var TARGETS = {calls:50,contacts:20,appts:5,listings:1,offers:2,closings:1};
-  var ITEMS = [["calls","Calls made"],["contacts","Contacts made"],["appts","Appointments set"],["listings","Listings taken"],["offers","Offers written"],["closings","Closings"]];
-  var ps = Math.round(((scores.calls||0)/TARGETS.calls+(scores.contacts||0)/TARGETS.contacts)/2*100);
-  var conv = (scores.contacts||0)>0 ? Math.round((scores.appts||0)/(scores.contacts||0)*100) : 0;
-  var gci = Math.round(((scores.listings||0)*715000*0.025)+((scores.closings||0)*715000*0.025));
-  return (
-    <div>
-      <div style={{fontSize:18,fontWeight:700,marginBottom:14}}>Weekly Scorecard</div>
-      <Card>
-        {ITEMS.map(function(x){
-          var pct = Math.min(100,Math.round((scores[x[0]]||0)/TARGETS[x[0]]*100));
-          var col = pct>=100?C.ac:pct>=60?C.go:C.ro;
-          return (
-            <div key={x[0]} style={{marginBottom:10}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
-                <span style={{fontSize:13,fontWeight:500,flex:1}}>{x[1]}</span>
-                <input style={{...inp,width:80}} type="number" min="0" value={scores[x[0]]||0} onChange={function(e){ setScores(function(p){ return {...p,[x[0]]:Number(e.target.value)}; }); }} />
-                <span style={{fontSize:11,color:C.t2,minWidth:65,textAlign:"right",fontFamily:"monospace"}}>{scores[x[0]]||0} / {TARGETS[x[0]]}</span>
-              </div>
-              <div style={{height:6,background:C.s3,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",borderRadius:3,background:col,width:pct+"%",transition:"width .4s"}} /></div>
-            </div>
-          );
-        })}
-      </Card>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:10}}>
-        {[["Prospecting",ps+"%",C.aL,C.ac,C.aB],["Conversion",conv+"%",C.gL,C.go,C.gB],["Est. GCI",fmtMoney(gci),C.s2,C.tx,C.br]].map(function(x){ return <div key={x[0]} style={{background:x[2],border:"1px solid "+x[4],borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em",color:C.t3,marginBottom:3}}>{x[0]}</div><div style={{fontSize:22,fontWeight:700,color:x[3],fontFamily:"monospace"}}>{x[1]}</div></div>; })}
-      </div>
-      <Btn v="primary" onClick={function(){ setAL(true); callAI("Give brief encouraging coaching to "+AGENT.name+", Sonoma County agent: "+ITEMS.map(function(x){ return x[1]+": "+(scores[x[0]]||0)+" (goal "+TARGETS[x[0]]+")"; }).join(", ")+". Specific, motivating, practical. Under 120 words.").then(function(t){ setAT(t); setAL(false); }); }}>✨ Get coaching feedback</Btn>
-      <AIBox text={aiTxt} loading={aiLd} />
-    </div>
-  );
-}
+/* ── SCORECARD merged into Weekly Goals (2026-09-21) — tab removed ── */
 
 function CenterMsg(props){
   return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:C.bg,color:C.t2,fontSize:14,fontFamily:"'DM Sans',system-ui",textAlign:"center",padding:24}}>{props.children}</div>;
