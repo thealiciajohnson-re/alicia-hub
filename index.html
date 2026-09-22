@@ -4197,6 +4197,87 @@ function PanelMortgage({defaultRate}) {
   );
 }
 
+/* ── AFFORDABILITY / PRE-QUAL CALCULATOR ─────────────────────── */
+// Loan-program presets. front/back = max DTI %; minDown = %; miRate = annual mortgage-insurance %;
+// upfront = one-time fee financed INTO the loan (FHA MIP / VA & USDA funding fee).
+const LOAN_TYPES = {
+  conv: {name:"Conventional", front:28, back:36, minDown:5,   miRate:0.5,  upfront:0,    note:"PMI applies when down payment is under 20%, and drops off once they reach 20% equity."},
+  fha:  {name:"FHA",          front:31, back:43, minDown:3.5, miRate:0.55, upfront:1.75, note:"Requires MIP (mortgage insurance) for the life of most loans. The 1.75% upfront fee is financed into the loan."},
+  va:   {name:"VA",           front:41, back:41, minDown:0,   miRate:0,    upfront:2.15, note:"$0 down and no monthly PMI. A ~2.15% funding fee is financed in (waived for some). Eligible veterans / active duty only."},
+  usda: {name:"USDA (Rural)", front:29, back:41, minDown:0,   miRate:0.35, upfront:1.0,  note:"$0 down in eligible rural areas. Household income limits apply. Small annual + 1% upfront fee."},
+};
+function PanelAfford({defaultRate}) {
+  var [loan,setLoan] = useState("conv");
+  var [inc,setInc]   = useState(90000);   // annual gross income
+  var [debt,setDebt] = useState(500);     // total OTHER monthly debt (cards, auto, student loans)
+  var [dpOv,setDpOv] = useState("");      // optional down-payment % override (blank = program minimum)
+  var [rate,setRate] = useState(defaultRate||6.9);
+  var [term,setTerm] = useState(30);
+  var [taxPct,setTaxPct] = useState(1.1);
+  var [insYr,setInsYr]   = useState(1500);
+  var [hoaMo,setHoaMo]   = useState(0);
+  var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
+  var L = LOAN_TYPES[loan];
+  var dp = (dpOv===""||dpOv==null) ? L.minDown : (Number(dpOv)||0);
+  var mIncome = (Number(inc)||0)/12;
+  var maxFront = mIncome*L.front/100;                          // housing payment cap
+  var maxBack  = mIncome*L.back/100 - (Number(debt)||0);       // total-debt cap, less existing debt
+  var maxPITI  = Math.max(0, Math.min(maxFront, maxBack));     // the binding monthly limit
+  function pitiFor(price){
+    var down = price*dp/100;
+    var base = price - down;
+    var financed = base + base*(L.upfront/100);                // upfront fee/MIP rolled into the loan
+    var r=(Number(rate)||0)/100/12, n=(Number(term)||30)*12;
+    var pi = r>0 ? financed*r/(1-Math.pow(1+r,-n)) : financed/(n||360);
+    var tax = price*(Number(taxPct)||0)/100/12;
+    var ins = (Number(insYr)||0)/12;
+    var mi  = (loan==="conv" && dp>=20) ? 0 : financed*(L.miRate/100)/12;
+    return pi + tax + ins + mi + (Number(hoaMo)||0);
+  }
+  var lo=0, hi=6000000;
+  for(var i=0;i<44;i++){ var mid=(lo+hi)/2; if(pitiFor(mid)<=maxPITI) lo=mid; else hi=mid; }
+  var maxPrice = Math.floor(lo/1000)*1000;
+  var reqDown  = Math.round(maxPrice*dp/100);
+  var loanAmt  = Math.round(maxPrice - reqDown);
+  var estPITI  = Math.round(pitiFor(maxPrice));
+  var binding  = maxBack < maxFront ? "their monthly debts (back-end "+L.back+"% DTI)" : "income (front-end "+L.front+"% DTI)";
+  return (
+    <div style={{marginTop:22}}>
+      <div style={{fontSize:16,fontWeight:700,marginBottom:2}}>💰 What can a buyer afford?</div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:10}}>Enter their income and monthly debts to estimate the home price they'd qualify for, the loan amount, and the down payment needed.</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+        {Object.keys(LOAN_TYPES).map(function(k){ var active=k===loan; return (
+          <div key={k} onClick={function(){ setLoan(k); }} style={{cursor:"pointer",fontSize:12.5,fontWeight:active?700:500,padding:"6px 13px",borderRadius:20,border:"1.5px solid "+(active?C.ac:C.br),color:active?"#fff":C.t2,background:active?C.ac:C.sur}}>{LOAN_TYPES[k].name}</div>
+        ); })}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <Card title="Their numbers">
+          <Row><Fld label="Annual income ($)"><input style={inp} type="number" value={inc} onChange={function(e){ setInc(Number(e.target.value)||0); }} /></Fld><Fld label="Monthly debts ($)"><input style={inp} type="number" value={debt} onChange={function(e){ setDebt(Number(e.target.value)||0); }} /></Fld></Row>
+          <div style={{fontSize:11,color:C.t3,marginTop:-2,marginBottom:6}}>💡 Monthly debts = car loans, credit-card minimums, student loans, child support — NOT rent or the new mortgage.</div>
+          <Row><Fld label="Down payment (%)"><input style={inp} type="number" step="any" placeholder={"min "+L.minDown+"%"} value={dpOv} onChange={function(e){ setDpOv(e.target.value); }} /></Fld><Fld label="Interest rate (%)"><input style={inp} type="number" step="any" value={rate} onChange={function(e){ setRate(Number(e.target.value)||0); }} /></Fld></Row>
+          <Row><Fld label="Loan term (yrs)"><input style={inp} type="number" value={term} onChange={function(e){ setTerm(Number(e.target.value)||0); }} /></Fld><Fld label="Property tax (%/yr)"><input style={inp} type="number" step="any" value={taxPct} onChange={function(e){ setTaxPct(Number(e.target.value)||0); }} /></Fld></Row>
+          <Row><Fld label="Home insurance ($/yr)"><input style={inp} type="number" value={insYr} onChange={function(e){ setInsYr(Number(e.target.value)||0); }} /></Fld><Fld label="HOA dues ($/mo)"><input style={inp} type="number" value={hoaMo} onChange={function(e){ setHoaMo(Number(e.target.value)||0); }} /></Fld></Row>
+          <div style={{fontSize:11,color:C.t3,marginTop:4,lineHeight:1.5}}>Using down payment of <b>{dp}%</b>{dpOv===""?" (program minimum)":""}. Leave down payment blank to use the {L.name} minimum ({L.minDown}%).</div>
+        </Card>
+        <Card title={L.name+" — estimated approval"}>
+          <div style={{textAlign:"center",padding:"6px 0 10px"}}>
+            <div style={{fontSize:11,color:C.t3,textTransform:"uppercase",letterSpacing:".06em"}}>Max home price</div>
+            <div style={{fontSize:32,fontWeight:800,color:C.ac,fontFamily:"monospace"}}>{fmtMoney(maxPrice)}</div>
+          </div>
+          {[["Loan amount",fmtMoney(loanAmt)],["Down payment needed ("+dp+"%)",fmtMoney(reqDown)],["Est. monthly payment (PITI)",fmtMoney(estPITI)+"/mo"],["Max qualifying payment",fmtMoney(Math.round(maxPITI))+"/mo"]].map(function(x){ return <div key={x[0]} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid "+C.br,fontSize:13}}><span style={{color:C.t2}}>{x[0]}</span><span style={{fontWeight:500}}>{x[1]}</span></div>; })}
+          <div style={{background:C.s2,borderRadius:7,padding:"8px 10px",marginTop:10,fontSize:12,color:C.t2,lineHeight:1.6}}>
+            <div>Limited by <b>{binding}</b>.</div>
+            <div style={{marginTop:3}}>{L.note}</div>
+          </div>
+          <Btn v="gold" style={{marginTop:8}} onClick={function(){ setAL(true); callAI("Explain in plain, encouraging language for a Sonoma County home buyer what they can afford. Loan type "+L.name+". Annual income "+fmtMoney(inc)+", monthly debts "+fmtMoney(debt)+". Estimate: max home price "+fmtMoney(maxPrice)+", loan "+fmtMoney(loanAmt)+", down payment "+fmtMoney(reqDown)+" ("+dp+"%), monthly payment about "+fmtMoney(estPITI)+". This is limited by "+binding+". Remind them it's an estimate, not a lender pre-approval, and suggest a next step. Under 130 words.").then(function(t){ setAT(t); setAL(false); }); }}>✨ Explain to buyer</Btn>
+          <AIBox text={aiTxt} loading={aiLd} />
+        </Card>
+      </div>
+      <div style={{fontSize:11,color:C.t3,marginTop:8,lineHeight:1.5,maxWidth:680}}>⚠️ Estimate only — not a pre-approval. Real limits depend on credit score, the lender's automated underwriting, loan-limit caps, and program eligibility (VA needs a Certificate of Eligibility; USDA has area + income limits). Always send buyers to a lender for a true pre-approval.</div>
+    </div>
+  );
+}
+
 /* ── BUYER NET SHEET ─────────────────────────────────────────── */
 function PanelBuyerNet({leads,setLeads}) {
   var BDEF = {price:715000,downPct:20,rate:6.5,term:30,closing:11000,earnest:10000,sellerCredit:0};
@@ -4673,6 +4754,7 @@ function PanelRates({market,setMarket}) {
       <div style={{fontSize:11,color:C.t3,marginTop:8,lineHeight:1.5,maxWidth:620}}>💡 <b>🔄 Refresh from web</b> pulls the latest 30-yr & 15-yr fixed averages from Freddie Mac (free, via the Fed's data feed). It updates weekly. The 5/1 ARM isn't in that feed, so edit it manually if you track it.</div>
       <div style={{borderTop:"1px solid "+C.br,margin:"20px 0 4px"}} />
       <PanelMortgage defaultRate={rates[0]?(parseFloat(String(rates[0].val).replace(/[^0-9.]/g,""))||6.9):6.9} />
+      <PanelAfford defaultRate={rates[0]?(parseFloat(String(rates[0].val).replace(/[^0-9.]/g,""))||6.9):6.9} />
     </div>
   );
 }
