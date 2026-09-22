@@ -126,7 +126,7 @@ const AGENT = {
 const BREVO_SENDER = "alicia@thealiciajohnsonhomes.com";
 
 // Bump this whenever the hub is updated, so you can confirm you're viewing the latest file.
-const BUILD = "Jul 2 · build 8";
+const BUILD = "Sep 21 · build 9";
 
 const TICON = { hot:"🔥", warm:"🌤", cold:"❄️" };
 const NLBL = { active:"Active","long-term":"Long-term",drip:"Drip",monthly:"Monthly",quarterly:"Quarterly",none:"None" };
@@ -1971,9 +1971,9 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                 <input style={{...inp,marginBottom:4,fontSize:12,fontFamily:"monospace"}} placeholder="Phone 2 (optional)" value={phone2Draft} onChange={function(e){setPhone2Draft(e.target.value);}} onBlur={function(){saveContact("phone2",phone2Draft);}} />
                 <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Email" value={emailDraft} onChange={function(e){setEmailDraft(e.target.value);}} onBlur={function(){saveContact("email",emailDraft);}} />
                 <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Email 2 (optional)" value={email2Draft} onChange={function(e){setEmail2Draft(e.target.value);}} onBlur={function(){saveContact("email2",email2Draft);}} />
-                <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Address" value={addrDraft} onChange={function(e){setAddrDraft(e.target.value);}} onBlur={function(){saveContact("addr",addrDraft);}} />
+                <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Primary home address (where they live)" value={addrDraft} onChange={function(e){setAddrDraft(e.target.value);}} onBlur={function(){saveContact("addr",addrDraft);}} />
+                <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Rental / 2nd property they own (optional)" value={addr2Draft} onChange={function(e){setAddr2Draft(e.target.value);}} onBlur={function(){saveContact("addr2",addr2Draft);}} />
                 <input style={{...inp,marginBottom:4,fontSize:12,fontFamily:"monospace"}} placeholder="ZIP code (for local market numbers)" value={zipDraft} onChange={function(e){setZipDraft(e.target.value);}} onBlur={function(){saveContact("zip",zipDraft.trim());}} />
-                <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="2nd address — ranch, rental, other property (optional)" value={addr2Draft} onChange={function(e){setAddr2Draft(e.target.value);}} onBlur={function(){saveContact("addr2",addr2Draft);}} />
                 <div style={{fontSize:11,color:C.t3,marginBottom:2}}>📷 Instagram · 🎵 TikTok</div>
                 <div style={{display:"flex",gap:4,marginBottom:4}}>
                   <input style={{...inp,fontSize:12}} placeholder="@instagram" value={modal.ig||""} onChange={function(e){ saveContact("ig",e.target.value); }} />
@@ -2192,7 +2192,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
 
 /* ── ADD LEAD ────────────────────────────────────────────────── */
 function PanelAddLead({addLead,setTab}) {
-  var blank = {first:"",last:"",phone:"",phone2:"",email:"",email2:"",ig:"",tiktok:"",addr:"",zip:"",type:"buyer",temp:"warm",source:"Zillow",situation:[],auctionDate:"",expiredDate:"",nurture:"active",timeline:"0–3 months",fdays:3,notes:"",autoNurture:"off",lastNurtured:null,bday:"",sendIntro:true};
+  var blank = {first:"",last:"",phone:"",phone2:"",email:"",email2:"",ig:"",tiktok:"",addr:"",addr2:"",zip:"",type:"buyer",temp:"warm",source:"Zillow",situation:[],auctionDate:"",expiredDate:"",nurture:"active",timeline:"0–3 months",fdays:3,notes:"",autoNurture:"off",lastNurtured:null,bday:"",sendIntro:true};
   var [form,setForm] = useState(blank); var [st,setSt] = useState(""); var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
   function fld(k){ return function(e){ setForm(function(p){ return {...p,[k]:e.target.value}; }); }; }
   function save(withAI) {
@@ -2241,9 +2241,12 @@ function PanelAddLead({addLead,setTab}) {
         </Row>
         <div style={{fontSize:11,color:C.t3,marginTop:-2,marginBottom:2}}>💡 Only have a username? Just fill in Instagram or TikTok — you can save the lead with no name, phone, or email. The handle becomes their name until you learn it.</div>
         <Row cols="2fr 1fr 1fr">
-          <Fld label="Address"><input style={inp} placeholder="123 Main St, Santa Rosa" value={form.addr} onChange={fld("addr")} /></Fld>
+          <Fld label="Primary home address"><input style={inp} placeholder="123 Main St, Santa Rosa" value={form.addr} onChange={fld("addr")} /></Fld>
           <Fld label="ZIP code"><input style={inp} placeholder="95403" value={form.zip} onChange={fld("zip")} /></Fld>
           <Fld label="🎂 Birthday"><input style={inp} type="date" value={form.bday} onChange={fld("bday")} title="Their birthday — surfaces on your Dashboard & prompts a birthday message" /></Fld>
+        </Row>
+        <Row cols="1fr">
+          <Fld label="Rental / 2nd property they own (optional)"><input style={inp} placeholder="e.g. 456 Rental Ave, Petaluma — the property they'd sell or lease" value={form.addr2} onChange={fld("addr2")} /></Fld>
         </Row>
       </Card>
       <Card title="Classification">
