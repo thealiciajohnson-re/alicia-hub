@@ -935,7 +935,9 @@ function PanelCMA({cmas,setCmas,leads,setLeads}) {
   var [c,setC] = useState(BLANK);
   var [msg,setMsg] = useState("");
   var [leadId,setLeadId] = useState("");
-  var sellers = (leads||[]).filter(function(l){ return (l.type==="seller"||l.type==="both") && !l.prospect; });
+  // Show every lead that appears in All Leads (same rule) so a CMA can be attached to any of them —
+  // sellers, buyers, and working expired/FSBO/foreclosure leads alike. Sorted by name.
+  var sellers = (leads||[]).filter(function(l){ return !hideFromLeads(l); }).slice().sort(function(a,b){ return ((a.first||"")+(a.last||"")).toLowerCase().localeCompare(((b.first||"")+(b.last||"")).toLowerCase()); });
   function pickLead(e){
     var id=e.target.value; setLeadId(id);
     var L=(leads||[]).find(function(x){ return x.id===id; });
@@ -4146,6 +4148,55 @@ function PanelNet({leads,setLeads}) {
   );
 }
 
+/* ── MORTGAGE CALCULATOR ─────────────────────────────────────── */
+function PanelMortgage({defaultRate}) {
+  var DEF = {price:715000,downPct:20,rate:(defaultRate||6.9),term:30,taxPct:1.1,insYr:1500,hoaMo:0,pmiPct:0.5};
+  var [v,setV] = useState(DEF);
+  var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
+  function upd(k){ return function(e){ setV(function(p){ return {...p,[k]:Number(e.target.value)||0}; }); }; }
+  var down = Math.round(v.price*(Number(v.downPct)||0)/100);
+  var loanAmt = Math.max(0, v.price - down);
+  var r=(Number(v.rate)||0)/100/12, n=(Number(v.term)||30)*12;
+  var pi = r>0 ? Math.round(loanAmt*r/(1-Math.pow(1+r,-n))) : Math.round(loanAmt/(n||360));
+  var taxMo = Math.round(v.price*(Number(v.taxPct)||0)/100/12);
+  var insMo = Math.round((Number(v.insYr)||0)/12);
+  var hoaMo = Math.round(Number(v.hoaMo)||0);
+  var pmiMo = (Number(v.downPct)<20) ? Math.round(loanAmt*(Number(v.pmiPct)||0)/100/12) : 0;
+  var total = pi+taxMo+insMo+hoaMo+pmiMo;
+  var totalInterest = pi>0 ? Math.round(pi*n - loanAmt) : 0;
+  var rows = [["Principal & interest",pi],["Property tax",taxMo],["Home insurance",insMo],["HOA dues",hoaMo],["PMI"+(Number(v.downPct)>=20?" (none — 20%+ down)":""),pmiMo]];
+  return (
+    <div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>🧮 Mortgage Calculator</div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:12}}>Estimate a buyer's full monthly payment — principal, interest, taxes, insurance, HOA and PMI.</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <Card title="Loan details">
+          <Row><Fld label="Home price ($)"><input style={inp} type="number" value={v.price} onChange={upd("price")} /></Fld><Fld label="Down payment (%)"><input style={inp} type="number" step="any" value={v.downPct} onChange={upd("downPct")} /></Fld></Row>
+          <div style={{fontSize:11,color:C.t3,marginTop:-2,marginBottom:6}}>Down payment: <b>{fmtMoney(down)}</b> · Loan amount: <b>{fmtMoney(loanAmt)}</b></div>
+          <Row><Fld label="Interest rate (%)"><input style={inp} type="number" step="any" value={v.rate} onChange={upd("rate")} /></Fld><Fld label="Loan term (yrs)"><input style={inp} type="number" value={v.term} onChange={upd("term")} /></Fld></Row>
+          <Row><Fld label="Property tax (%/yr)"><input style={inp} type="number" step="any" value={v.taxPct} onChange={upd("taxPct")} /></Fld><Fld label="Home insurance ($/yr)"><input style={inp} type="number" value={v.insYr} onChange={upd("insYr")} /></Fld></Row>
+          <Row><Fld label="HOA dues ($/mo)"><input style={inp} type="number" value={v.hoaMo} onChange={upd("hoaMo")} /></Fld><Fld label="PMI (%/yr, if <20% down)"><input style={inp} type="number" step="any" value={v.pmiPct} onChange={upd("pmiPct")} /></Fld></Row>
+          <div style={{fontSize:11,color:C.t3,marginTop:2}}>💡 Sonoma County property tax runs ~1.1–1.25%/yr. PMI only applies when the down payment is under 20%.</div>
+        </Card>
+        <Card title="Estimated monthly payment">
+          <div style={{textAlign:"center",padding:"6px 0 10px"}}>
+            <div style={{fontSize:11,color:C.t3,textTransform:"uppercase",letterSpacing:".06em"}}>Total monthly payment</div>
+            <div style={{fontSize:34,fontWeight:800,color:C.ac,fontFamily:"monospace"}}>{fmtMoney(total)}<span style={{fontSize:15,color:C.t3}}>/mo</span></div>
+          </div>
+          {rows.map(function(x){ return <div key={x[0]} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid "+C.br,fontSize:13}}><span style={{color:C.t2}}>{x[0]}</span><span style={{fontWeight:500}}>{fmtMoney(x[1])}/mo</span></div>; })}
+          <div style={{background:C.s2,borderRadius:7,padding:"8px 10px",marginTop:10,fontSize:12,color:C.t2,lineHeight:1.6}}>
+            <div>Loan amount: <b>{fmtMoney(loanAmt)}</b> at {v.rate}% / {v.term} yr</div>
+            <div>Total interest over {v.term} yrs: <b>{fmtMoney(totalInterest)}</b></div>
+            <div>Total of all payments: <b>{fmtMoney(loanAmt+totalInterest)}</b></div>
+          </div>
+          <Btn v="gold" style={{marginTop:8}} onClick={function(){ setAL(true); callAI("Explain this monthly mortgage payment in plain, reassuring language for a Sonoma County home buyer: home price "+fmtMoney(v.price)+", "+v.downPct+"% down ("+fmtMoney(down)+"), loan "+fmtMoney(loanAmt)+" at "+v.rate+"% for "+v.term+" years. Monthly breakdown: P&I "+fmtMoney(pi)+", taxes "+fmtMoney(taxMo)+", insurance "+fmtMoney(insMo)+(hoaMo?", HOA "+fmtMoney(hoaMo):"")+(pmiMo?", PMI "+fmtMoney(pmiMo):"")+", total "+fmtMoney(total)+"/mo. Under 120 words.").then(function(t){ setAT(t); setAL(false); }); }}>✨ Explain to buyer</Btn>
+          <AIBox text={aiTxt} loading={aiLd} />
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 /* ── BUYER NET SHEET ─────────────────────────────────────────── */
 function PanelBuyerNet({leads,setLeads}) {
   var BDEF = {price:715000,downPct:20,rate:6.5,term:30,closing:11000,earnest:10000,sellerCredit:0};
@@ -4620,6 +4671,8 @@ function PanelRates({market,setMarket}) {
         <AIBox text={aiTxt} loading={aiLd} />
       </Card>
       <div style={{fontSize:11,color:C.t3,marginTop:8,lineHeight:1.5,maxWidth:620}}>💡 <b>🔄 Refresh from web</b> pulls the latest 30-yr & 15-yr fixed averages from Freddie Mac (free, via the Fed's data feed). It updates weekly. The 5/1 ARM isn't in that feed, so edit it manually if you track it.</div>
+      <div style={{borderTop:"1px solid "+C.br,margin:"20px 0 4px"}} />
+      <PanelMortgage defaultRate={rates[0]?(parseFloat(String(rates[0].val).replace(/[^0-9.]/g,""))||6.9):6.9} />
     </div>
   );
 }
