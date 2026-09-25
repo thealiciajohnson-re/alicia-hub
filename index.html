@@ -8,6 +8,7 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; }
@@ -3532,7 +3533,22 @@ function PanelMojo({leads,setLeads}) {
     setImp({headers:hs, cols:{phoneCount:phoneIdxs.length,idIdx:idIdx,dispIdx:dispIdx,lcIdx:lcIdx}, toUpdate:toUpdate, toAdd:toAdd, skippedCold:skippedCold, total:rows.length-1});
     setImpMsg("");
   }
-  function onFile(e){ var f=e.target.files&&e.target.files[0]; if(!f) return; if(/\.xlsx?$/i.test(f.name||"")){ setImpMsg("That's an Excel file — open it and Save As CSV first (Mojo exports .xlsx). Then choose the .csv here."); e.target.value=""; return; } var rd=new FileReader(); rd.onload=function(){ try{ handleCSV(String(rd.result||"")); }catch(err){ setImpMsg("Couldn't read that file — make sure it's a CSV from Mojo."); } }; rd.readAsText(f); e.target.value=""; }
+  function onFile(e){
+    var f=e.target.files&&e.target.files[0]; if(!f) return;
+    var isXlsx=/\.xlsx?$/i.test(f.name||"");
+    if(isXlsx){
+      if(typeof XLSX==="undefined"){ setImpMsg("The Excel reader is still loading — give it a second and choose the file again. (If it keeps failing, Save As CSV in Excel and upload that.)"); e.target.value=""; return; }
+      var rb=new FileReader();
+      rb.onload=function(){ try{
+        var wb=XLSX.read(new Uint8Array(rb.result),{type:"array"});
+        var ws=wb.Sheets[wb.SheetNames[0]];
+        if(!ws){ setImpMsg("That Excel file has no sheets to read."); return; }
+        var csv=XLSX.utils.sheet_to_csv(ws);
+        handleCSV(csv);
+      }catch(err){ setImpMsg("Couldn't read that Excel file — make sure it's the Mojo export (.xlsx), or Save As CSV and try again."); } };
+      rb.readAsArrayBuffer(f); e.target.value=""; return;
+    }
+    var rd=new FileReader(); rd.onload=function(){ try{ handleCSV(String(rd.result||"")); }catch(err){ setImpMsg("Couldn't read that file — make sure it's a CSV or Excel export from Mojo."); } }; rd.readAsText(f); e.target.value=""; }
   function mkNote(rec){ var b=[]; if(rec.status) b.push(rec.status+" listing"); if(rec.price){ var n=Number(String(rec.price).replace(/[^0-9.]/g,"")); if(n) b.push("List $"+Math.round(n).toLocaleString()); } if(rec.dom) b.push(rec.dom+" DOM"); if(rec.mls) b.push("MLS "+rec.mls); b.push("Spoke via Mojo"); return b.join(" · "); }
   function mkLead(rec){
     var line=(rec.lcDate||toDay())+" — 📞 Mojo: "+(rec.disp||"spoke")+(rec.att?" ("+rec.att+" attempts)":"")+(rec.note?" — "+rec.note:"");
@@ -3630,8 +3646,8 @@ function PanelMojo({leads,setLeads}) {
       </Card>
 
       <Card title="📥 Bring your Mojo calls back into the Hub">
-        <div style={{fontSize:12.5,color:C.t2,lineHeight:1.5,marginBottom:8}}>After you dial in Mojo, <b>export your list and Save As CSV</b>, then drop it here. People you've <b>spoken to</b> (a Last-Contacted date in Mojo) get added to your Hub as leads; anyone already here gets their call result + last-contact updated. Matched by <b>Contact ID + phone + name</b> so no duplicates — and nothing changes until you review below.</div>
-        <input type="file" accept=".csv,text/csv" onChange={onFile} style={{fontSize:12,marginBottom:6}} />
+        <div style={{fontSize:12.5,color:C.t2,lineHeight:1.5,marginBottom:8}}>After you dial in Mojo, <b>export your list</b> and drop the file here — <b>Excel (.xlsx) works directly now, or CSV</b>. People you've <b>spoken to</b> (a Last-Contacted date in Mojo) get added to your Hub as leads; anyone already here gets their call result + last-contact updated. Matched by <b>Contact ID + phone + name</b> so no duplicates — and nothing changes until you review below.</div>
+        <input type="file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onChange={onFile} style={{fontSize:12,marginBottom:6}} />
         {imp && <div style={{marginTop:6}}>
           <div style={{fontSize:11.5,color:C.t3,marginBottom:6}}>Detected — {imp.cols.idIdx>=0?<b style={{color:C.go}}>Contact ID ✓</b>:<span>matching on phone</span>} · {imp.cols.phoneCount} phone cols{imp.cols.dispIdx>=0?<span> · result: <b>{imp.headers[imp.cols.dispIdx]}</b></span>:null}{imp.cols.lcIdx>=0?<span> · spoke: <b>{imp.headers[imp.cols.lcIdx]}</b></span>:null}</div>
           <div style={{fontSize:11,color:C.t3,marginBottom:6}}>Add new contacts:
