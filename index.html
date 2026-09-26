@@ -128,7 +128,7 @@ const AGENT = {
 const BREVO_SENDER = "alicia@thealiciajohnsonhomes.com";
 
 // Bump this whenever the hub is updated, so you can confirm you're viewing the latest file.
-const BUILD = "Sep 25 · build 11";
+const BUILD = "Sep 26 · build 12";
 
 const TICON = { hot:"🔥", warm:"🌤", cold:"❄️" };
 const NLBL = { active:"Active","long-term":"Long-term",drip:"Drip",monthly:"Monthly",quarterly:"Quarterly",none:"None" };
@@ -1084,9 +1084,9 @@ function PanelCMA({cmas,setCmas,leads,setLeads}) {
 
 /* ── GROUP EMAIL to a prospect list (Expired / Foreclosure) — personalized + CAN-SPAM ── */
 var EXPIRED_EMAIL_SUBJECT = "About your home on {{street}}";
-var EXPIRED_EMAIL_BODY = "Hi {{first_name}},\n\nI noticed your home on {{street}} came off the market without selling.\n\nI'm not writing to ask for the listing. I put together a short breakdown of the four things I look for when a good home doesn't sell — presentation, showing access, where the price started, and whether it ever moved. It takes about two minutes to read.\n\nSee the four reasons: https://thealiciajohnsonhomes.com/expired\n\nOne of them is usually the whole story. If you read it and want the honest version for your specific house, text me and we'll walk it together before it goes back on.";
+var EXPIRED_EMAIL_BODY = "Hi there,\n\nI noticed your home on {{street}} came off the market without selling.\n\nI'm not writing to ask for the listing. I put together a short breakdown of the four things I look for when a good home doesn't sell — presentation, showing access, where the price started, and whether it ever moved. It takes about two minutes to read.\n\nSee the four reasons: https://thealiciajohnsonhomes.com/expired\n\nOne of them is usually the whole story. If you read it and want the honest version for your specific house, text me and we'll walk it together before it goes back on.";
 var FORECLOSURE_EMAIL_SUBJECT = "Your options for the home on {{street}}";
-var FORECLOSURE_EMAIL_BODY = "Hi {{first_name}},\n\nI work with homeowners across Sonoma County, and I put together a straightforward guide on the options available when you're facing foreclosure — several of them let you stay in control and protect the equity you've built.\n\nRead it here: https://thealiciajohnsonhomes.com/guides/facing-foreclosure-options-sonoma-county/\n\nEverything stays confidential. If you'd like to talk through your specific situation, just reply or text me — the earlier you know your options, the more of them you have.";
+var FORECLOSURE_EMAIL_BODY = "Hi there,\n\nI work with homeowners across Sonoma County, and I put together a straightforward guide on the options available when you're facing foreclosure — several of them let you stay in control and protect the equity you've built.\n\nRead it here: https://thealiciajohnsonhomes.com/guides/facing-foreclosure-options-sonoma-county/\n\nEverything stays confidential. If you'd like to talk through your specific situation, just reply or text me — the earlier you know your options, the more of them you have.";
 function streetOfList(l){ if(!l||!l.addr) return ""; return String(l.addr).split(",")[0].trim(); }
 function fillTokens(text,l){ return (text||"").replace(/\{\{\s*first_name\s*\}\}/gi,(l&&l.first)?l.first:"there").replace(/\{\{\s*first\s*\}\}/gi,(l&&l.first)?l.first:"there").replace(/\{\{\s*street\s*\}\}/gi,streetOfList(l)||"your street"); }
 function bodyToLinkedHtml(text){ var esc=function(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }; var linkify=function(s){ return s.replace(/(^|[\s(>])((https?:\/\/)?(www\.)?[a-z0-9-]+\.(?:com|net|org|io|co)(?:\/[^\s<)]*)?)/gi,function(m,pre,url){ if(url.indexOf("@")>=0) return m; var href=/^https?:\/\//i.test(url)?url:("https://"+url); return pre+"<a href=\""+href+"\" style=\"color:#2a5a8c;font-weight:bold\">"+url+"</a>"; }); }; return (text||"").split(/\n\n+/).map(function(p){ return "<p style=\"margin:0 0 14px\">"+linkify(esc(p)).replace(/\n/g,"<br>")+"</p>"; }).join(""); }
@@ -1217,7 +1217,7 @@ function GroupEmailCard({title, blurb, recips, defSubject, defBody, tag, blastFi
         <div>
           <Fld label="Subject"><input style={inp} value={subj} onChange={function(e){ setSubj(e.target.value); }} /></Fld>
           <div style={{height:8}} />
-          <Fld label={"Message — {{first_name}} and {{street}} fill in per lead"}><textarea style={{...inp,minHeight:200,resize:"vertical",lineHeight:1.55,fontFamily:"inherit"}} value={body} onChange={function(e){ setBody(e.target.value); }} /></Fld>
+          <Fld label={"Message — {{street}} fills in per lead (no first name — imported names aren't reliable)"}><textarea style={{...inp,minHeight:200,resize:"vertical",lineHeight:1.55,fontFamily:"inherit"}} value={body} onChange={function(e){ setBody(e.target.value); }} /></Fld>
           <div style={{height:8}} />
           <Fld label="Your mailing address (shown in the footer — required by CAN-SPAM law)"><input style={inp} value={mailAddr} onChange={function(e){ setMailAddr(e.target.value); }} placeholder="123 Main St, Santa Rosa, CA 95401" /></Fld>
           <div style={{fontSize:11,color:C.t3,margin:"8px 0 4px"}}>👀 Preview{recips[0]?" (for "+recips[0].first+" "+recips[0].last+")":""}:</div>
