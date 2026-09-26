@@ -128,7 +128,7 @@ const AGENT = {
 const BREVO_SENDER = "alicia@thealiciajohnsonhomes.com";
 
 // Bump this whenever the hub is updated, so you can confirm you're viewing the latest file.
-const BUILD = "Sep 25 · build 10";
+const BUILD = "Sep 25 · build 11";
 
 const TICON = { hot:"🔥", warm:"🌤", cold:"❄️" };
 const NLBL = { active:"Active","long-term":"Long-term",drip:"Drip",monthly:"Monthly",quarterly:"Quarterly",none:"None" };
@@ -1095,6 +1095,89 @@ function uniqEmailLeads(list){ var seen={},out=[]; (list||[]).forEach(function(l
 var GROUP_SIG_HTML = '<table cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;margin-top:6px;"><tr><td style="padding-right:14px;vertical-align:top;"><img src="https://thealiciajohnsonhomes.com/images/alicia-headshot.jpg" alt="Alicia Johnson, Excellerate Real Estate" width="64" height="108" style="border-radius:6px;display:block;"></td><td style="vertical-align:top;font-size:13px;color:#333;line-height:1.5;"><strong style="font-size:15px;color:#1a1a1a;">Alicia Johnson</strong><br>REALTOR&reg; &middot; Excellerate Real Estate<br>707-849-6775 &middot; <a href="mailto:alicia@excelleraterealestate.com" style="color:#2a5a8c;">alicia@excelleraterealestate.com</a><br><a href="https://thealiciajohnsonhomes.com" style="color:#2a5a8c;">thealiciajohnsonhomes.com</a> &middot; DRE #02272644</td></tr></table>';
 function groupEmailHtml(body,l,mailAddr){ return "<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#222;max-width:560px;margin:0 auto\">"+bodyToLinkedHtml(fillTokens(body,l))+GROUP_SIG_HTML+"</div>"+complianceFooterHtml(mailAddr); }
 
+// Import a PropertyRadar / Auction.com foreclosure export (Excel or CSV) → foreclosure cold-call prospects.
+// Everyone lands in the "🏚️ New Prospect Leads" list (prospect:foreclosure + listName), never in All Leads.
+function FcImportCard({leads, setLeads}){
+  var [pending,setPending] = useState(null);
+  var [msg,setMsg] = useState("");
+  function norm(s){ return String(s==null?"":s).trim(); }
+  function ph10(s){ return norm(s).replace(/\D/g,"").slice(-10); }
+  function normAddr(a){ return (norm(a).toLowerCase().split(",")[0]||"").replace(/[^a-z0-9]+/g," ").trim(); }
+  function pick(o,names){ var ks=Object.keys(o),i,k; for(i=0;i<names.length;i++){ for(k=0;k<ks.length;k++){ if(ks[k].toLowerCase().trim()===names[i]) return o[ks[k]]; } } for(i=0;i<names.length;i++){ for(k=0;k<ks.length;k++){ if(ks[k].toLowerCase().indexOf(names[i])>=0) return o[ks[k]]; } } return ""; }
+  function build(objs){
+    var radar={},addrS={},emailS={},namephone={};
+    (leads||[]).forEach(function(l){
+      if(l.radarId) radar[String(l.radarId)]=1;
+      if(l.addr) addrS[normAddr(l.addr)+"|"+(String(l.addr).toLowerCase().split(",")[1]||"").trim()]=1;
+      [l.email,l.email2].forEach(function(e){ e=(e||"").toLowerCase().trim(); if(e.indexOf("@")>0) emailS[e]=1; });
+      var nm=((l.first||"")+" "+(l.last||"")).toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+      [l.phone,l.phone2].forEach(function(p){ var k=ph10(p); if(k.length===10 && nm) namephone[nm+"|"+k]=1; });
+    });
+    var news=[], dupes=0, seen={};
+    objs.forEach(function(o){
+      var first=norm(pick(o,["primary first","first name","first"]));
+      var last=norm(pick(o,["primary last","last name","last"]));
+      var nm=norm(pick(o,["primary name","owner name","owner","name"]));
+      if(!first && !last && nm){ var parts=nm.split(/\s+/); first=parts[0]||""; last=parts.slice(1).join(" "); }
+      var email1=norm(pick(o,["primary email1","email 1","email"]));
+      var email2=norm(pick(o,["secondary email1","email 2"]));
+      var phone=norm(pick(o,["primary phone1","phone 1","phone","mobile"]));
+      var st=norm(pick(o,["address","property address","street"]));
+      var city=norm(pick(o,["city","property city"]));
+      var state=norm(pick(o,["state"]))||"CA";
+      var zip=norm(pick(o,["zip","zip code","postal"]));
+      var radarId=norm(pick(o,["radar id","radarid"]));
+      if(!st && !phone && !email1 && !radarId) return;
+      var full=[st, city, state+(zip?" "+zip:"")].filter(Boolean).join(", ");
+      var akey=normAddr(st)+"|"+city.toLowerCase();
+      var nmk=((first+" "+last).toLowerCase().replace(/[^a-z0-9]+/g," ").trim())+"|"+ph10(phone);
+      var fkey=radarId||akey||email1.toLowerCase()||nmk;
+      if(seen[fkey]) return; seen[fkey]=1;
+      var dup=(radarId&&radar[String(radarId)]) || (st&&addrS[akey]) || (email1&&emailS[email1.toLowerCase()]) || (ph10(phone).length===10 && namephone[nmk]);
+      if(dup){ dupes++; return; }
+      news.push({ id:uid(), first:first, last:last, phone:phone, phone2:"", email:email1, email2:email2, ig:"", tiktok:"", addr:full, zip:zip, type:"seller", temp:"cold", source:"Foreclosure — PropertyRadar", nurture:"none", timeline:"", prospect:"foreclosure", listName:"PropertyRadar", radarId:radarId, notes:"🏚️ PropertyRadar foreclosure / pre-foreclosure prospect. Cold call — motivated seller.", added:toDay(), fu:toDay(), lc:null, log:[toDay()+" — Imported from PropertyRadar export"], bday:"" });
+    });
+    setPending({news:news, dupes:dupes, total:objs.length}); setMsg("");
+  }
+  function onFile(e){
+    var f=e.target.files&&e.target.files[0]; if(!f) return;
+    if(typeof XLSX==="undefined"){ setMsg("The Excel reader is still loading — try the file again in a second."); e.target.value=""; return; }
+    var isXlsx=/\.xlsx?$/i.test(f.name||"");
+    var rd=new FileReader();
+    rd.onload=function(){ try{
+      var wb = isXlsx ? XLSX.read(new Uint8Array(rd.result),{type:"array"}) : XLSX.read(String(rd.result||""),{type:"string"});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      if(!ws){ setMsg("That file has no sheet to read."); return; }
+      var objs=XLSX.utils.sheet_to_json(ws,{defval:""});
+      if(!objs.length){ setMsg("That file has no rows."); return; }
+      build(objs);
+    }catch(err){ setMsg("Couldn't read that file — make sure it's the PropertyRadar Excel (.xlsx) or a CSV export."); } };
+    if(isXlsx) rd.readAsArrayBuffer(f); else rd.readAsText(f);
+    e.target.value="";
+  }
+  function commit(){
+    if(!pending||!pending.news.length) return;
+    var add=pending.news;
+    setLeads(function(p){ return [...add, ...(p||[])]; });
+    setMsg("✓ Added "+add.length+" foreclosure prospect"+(add.length===1?"":"s")+" to your 🏚️ New Prospect Leads — Cold Call list below.");
+    setPending(null);
+  }
+  return (
+    <Card title="📥 Import Foreclosure / Prospect List (PropertyRadar · Auction.com — Excel or CSV)">
+      <div style={{fontSize:11.5,color:C.t2,lineHeight:1.5,marginBottom:8}}>Export your <b>PropertyRadar</b> or <b>Auction.com</b> list to Excel and drop it here. Everyone imports as a <b>foreclosure cold-call prospect</b> — straight to your <b>🏚️ New Prospect Leads</b> list below, never into All Leads. Matched against your existing leads by Radar ID, address, email, and name+phone so <b>no duplicates</b>. Nothing is added until you review and confirm.</div>
+      <input type="file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onChange={onFile} style={{fontSize:12,marginBottom:6}} />
+      {pending && <div style={{marginTop:6}}>
+        <div style={{fontSize:13,fontWeight:600,color:C.tx}}>{pending.news.length} new to add · {pending.dupes} already in your hub (skipped) · {pending.total} in file</div>
+        {pending.news.length>0 && <div style={{fontSize:11,color:C.t3,margin:"4px 0 8px"}}>Sample: {pending.news.slice(0,3).map(function(r){ return (r.first+" "+r.last).trim()+" — "+(r.addr||"(no address)"); }).join("  ·  ")}</div>}
+        {pending.news.length>0
+          ? <Btn v="primary" onClick={commit}>➕ Add {pending.news.length} to Foreclosure list</Btn>
+          : <div style={{fontSize:12,color:C.t2,marginTop:4}}>Nothing new — all rows are already in your hub.</div>}
+      </div>}
+      {msg && <div style={{fontSize:12,color:(msg.indexOf("Couldn't")>=0||msg.indexOf("no ")>=0)?C.ro:C.ac,marginTop:8,fontWeight:500}}>{msg}</div>}
+    </Card>
+  );
+}
+
 // Reusable "email this group" card — compose, personalize ({{first_name}}/{{street}}), send via Brevo one-by-one with a CAN-SPAM footer.
 function GroupEmailCard({title, blurb, recips, defSubject, defBody, tag, blastField, setLeads}){
   var [emailOpen,setEmailOpen] = useState(false);
@@ -1218,6 +1301,7 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
         <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Expireds you've already contacted or added by hand — the ones you're actively working.</div>
         {expired.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — cold-call a new expired above (✓ Contacted), or tap 🎯 Expired on any lead.</div> : expired.map(row)}
       </Card>
+      <FcImportCard leads={leads} setLeads={setLeads} />
       <GroupEmailCard
         title={"📧 Email the Foreclosure / Auction List (" + uniqEmailLeads(foreNew.concat(foreWork)).length + " with email)"}
         blurb={<span>Reach every <b>foreclosure · pre-foreclosure · auction · divorce</b> prospect that has an email. The template links to your <b>“Facing Foreclosure: Options in Sonoma County”</b> guide — educational and confidential, personalized per lead, sent via Brevo with an unsubscribe + mailing address (CAN-SPAM). Most of these come in address-only, so add an email on the lead card to include them here.</span>}
