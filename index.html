@@ -105,6 +105,7 @@ const hideFromLeads = l => {
   var p = l.prospect;
   if(p==="lost") return true;                                  // monitoring only — never in Leads
   if(p==="expired") return true;                               // Expired list is SEPARATE — lives only in the Expired/FSBO/Lost tab, never in All Leads (until converted → Nurture, which clears prospect)
+  if(p==="circle") return true;                                // Circle-prospecting neighbors live ONLY in the Circle Prospecting tab, never in All Leads
   if(["foreclosure","fsbo"].indexOf(p)<0) return false;
   if(l.contacted) return false;                                // contacted = working = show in Leads
   return !!(l.mlNum || l.radarId || l.listName);               // hide only NEW auto-captured; manual entries stay
@@ -734,7 +735,8 @@ function App() {
   if (!ready) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:C.bg,color:C.t3,fontSize:14,fontFamily:"system-ui"}}>Loading your hub…</div>;
 
   const pendRem = rems.filter(function(r){ return !r.done; }).length;
-  const watchN = leads.filter(function(l){ return l.prospect; }).length;
+  const watchN = leads.filter(function(l){ return l.prospect && l.prospect!=="circle"; }).length;
+  const circleN = leads.filter(function(l){ return l.prospect==="circle"; }).length;
   const dueToday = leads.filter(function(l){ return l.fu && l.fu <= toDay(); }).length;
   const nurtureDueN = leads.filter(nurtureDue).length;
   const socialDueN = social.filter(function(p){ return p.status!=="posted" && p.date && p.date <= toDay(); }).length;
@@ -742,7 +744,7 @@ function App() {
 
   const NAV = [
     {s:"Daily",items:[{id:"dashboard",l:"Dashboard"},{id:"calendar",l:"Today"},{id:"rems",l:"Reminders",b:pendRem}]},
-    {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.filter(function(l){ return !hideFromLeads(l); }).length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired/FSBO/Lost",b:watchN}]},
+    {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.filter(function(l){ return !hideFromLeads(l); }).length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired/FSBO/Lost",b:watchN},{id:"circle",l:"Circle Prospecting",b:circleN}]},
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"cma",l:"🏷️ CMA / Comps"},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
@@ -803,6 +805,7 @@ function App() {
           {tab==="addlead"   && <PanelAddLead {...pp} />}
           {tab==="pipeline"  && <PanelPipeline {...pp} />}
           {tab==="watch"     && <PanelWatch {...pp} />}
+          {tab==="circle"    && <PanelCircle leads={leads} setLeads={setLeads} />}
           {tab==="cma"       && <PanelCMA {...pp} />}
           {tab==="roadmap"   && <PanelRoadmap {...pp} />}
           {tab==="actionplans" && <PanelActionPlans {...pp} />}
@@ -1086,6 +1089,8 @@ var EXPIRED_EMAIL_SUBJECT = "About your home on {{street}}";
 var EXPIRED_EMAIL_BODY = "Hi there,\n\nI noticed your home on {{street}} came off the market without selling.\n\nI'm not writing to ask for the listing. I put together a short breakdown of the four things I look for when a good home doesn't sell — presentation, showing access, where the price started, and whether it ever moved. It takes about two minutes to read.\n\nSee the four reasons: https://thealiciajohnsonhomes.com/expired\n\nOne of them is usually the whole story. If you read it and want the honest version for your specific house, text me and we'll walk it together before it goes back on.";
 var FORECLOSURE_EMAIL_SUBJECT = "Your options for the home on {{street}}";
 var FORECLOSURE_EMAIL_BODY = "Hi there,\n\nI work with homeowners across Sonoma County, and I put together a straightforward guide on the options available when you're facing foreclosure — several of them let you stay in control and protect the equity you've built.\n\nRead it here: https://thealiciajohnsonhomes.com/guides/facing-foreclosure-options-sonoma-county/\n\nEverything stays confidential. If you'd like to talk through your specific situation, just reply or text me — the earlier you know your options, the more of them you have.";
+var CIRCLE_EMAIL_SUBJECT = "A home just came on the market near you 🏡";
+var CIRCLE_EMAIL_BODY = "Hi there,\n\nA home right here in your neighborhood just came on the market. Whenever a nearby home lists, it resets what buyers expect — and what homes like yours are worth today.\n\nIf you've ever wondered what your home would sell for in this market, I'll put together a current, accurate value for you — the same detailed analysis I give every client before we list. Just reply, call, or text and I'll get it started.";
 function streetOfList(l){ if(!l||!l.addr) return ""; return String(l.addr).split(",")[0].trim(); }
 function fillTokens(text,l){ return (text||"").replace(/\{\{\s*first_name\s*\}\}/gi,(l&&l.first)?l.first:"there").replace(/\{\{\s*first\s*\}\}/gi,(l&&l.first)?l.first:"there").replace(/\{\{\s*street\s*\}\}/gi,streetOfList(l)||"your street"); }
 function bodyToLinkedHtml(text){ var esc=function(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }; var linkify=function(s){ return s.replace(/(^|[\s(>])((https?:\/\/)?(www\.)?[a-z0-9-]+\.(?:com|net|org|io|co)(?:\/[^\s<)]*)?)/gi,function(m,pre,url){ if(url.indexOf("@")>=0) return m; var href=/^https?:\/\//i.test(url)?url:("https://"+url); return pre+"<a href=\""+href+"\" style=\"color:#2a5a8c;font-weight:bold\">"+url+"</a>"; }); }; return (text||"").split(/\n\n+/).map(function(p){ return "<p style=\"margin:0 0 14px\">"+linkify(esc(p)).replace(/\n/g,"<br>")+"</p>"; }).join(""); }
@@ -1324,6 +1329,148 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
       </Card>
       <div style={{borderTop:"1px solid "+C.br,margin:"22px 0 16px"}} />
       <PanelMojo leads={leads} setLeads={setLeads} />
+    </div>
+  );
+}
+
+/* ── CIRCLE PROSPECTING ──────────────────────────────────────── */
+function PanelCircle({leads,setLeads}) {
+  var L = (leads||[]).filter(function(l){ return l.prospect==="circle"; });
+  var farms = {};
+  L.forEach(function(l){ var f=l.farm||"Unsorted"; (farms[f]=farms[f]||[]).push(l); });
+  var farmNames = Object.keys(farms).sort();
+  var [paste,setPaste] = useState("");
+  var [farm,setFarm] = useState("2046 Northfield Dr");
+  var [listed,setListed] = useState("");
+  var [prev,setPrev] = useState(null);
+  var [msg,setMsg] = useState("");
+
+  function zipFrom(a){ var m=String(a||"").match(/\b(\d{5})\b/); return m?m[1]:""; }
+  function streetKey(a){ return String(a||"").toLowerCase().replace(/,.*/,"").replace(/\s+/g," ").trim(); }
+  function splitName(nm){ nm=String(nm||"").trim(); if(!nm) return {first:"",last:""}; var p=nm.split(/\s+/); if(p.length===1) return {first:p[0],last:""}; return {first:p[0], last:p.slice(1).join(" ")}; }
+  function uniq(a){ var s={},o=[]; (a||[]).forEach(function(x){ x=String(x||"").trim(); if(x && !s[x.toLowerCase()]){ s[x.toLowerCase()]=1; o.push(x);} }); return o; }
+
+  function parseMojo(text){
+    var lines=String(text).split(/\n/).map(function(s){return s.trim();});
+    var recs=[], cur=null, mode="";
+    function push(){ if(cur && (cur.addr||cur.emails.length||cur.phones.length)) recs.push(cur); }
+    for(var i=0;i<lines.length;i++){
+      var ln=lines[i]; if(!ln) continue;
+      if(/^property address$/i.test(ln)){ mode="paddr"; continue; }
+      if(/^mailing address$/i.test(ln)){ mode="maddr"; continue; }
+      if(/^phones?:?$/i.test(ln)){ mode="phone"; continue; }
+      if(/^e-?mails?:?$/i.test(ln)){ mode="email"; continue; }
+      if(/^groups?:?$/i.test(ln) || /^notes:?$/i.test(ln)){ mode=""; continue; }
+      if(/^(icon|\+|\^|view more|primary contact|manager:|none|type note here)/i.test(ln)) continue;
+      if(/\d+ linked contact/i.test(ln)) continue;
+      if(/follow up|sign them|not yet interested|cold not dead|email list|active client/i.test(ln)) continue;
+      if(/linked to (other )?contact|no new contact information|skip tracer|leadstore service|tap \[\+\]/i.test(ln)) continue;
+      if(/^alicia johnson\b/i.test(ln)) continue;
+      if(/^\d{1,2}$/.test(ln)) continue;
+      if(/@/.test(ln)){ if(cur) cur.emails.push(ln); continue; }
+      var isPhone=/^\+?\d[\d\-() ]{6,}\d$/.test(ln);
+      if(isPhone){ if(cur) cur.phones.push(ln.replace(/[^\d]/g,"")); continue; }
+      if(mode==="paddr"){ if(cur) cur.addr=ln; mode=""; continue; }
+      if(mode==="maddr"){ if(cur) cur.mailing=ln; mode=""; continue; }
+      if(cur && cur.addr){ push(); cur=null; }
+      if(!cur){ cur={name:ln,co:"",addr:"",mailing:"",phones:[],emails:[]}; }
+      else if(!cur.co){ cur.co=ln; }
+    }
+    push();
+    return recs;
+  }
+  function doPreview(){
+    var recs=parseMojo(paste);
+    if(!recs.length){ setMsg("Couldn't find any records. Copy contacts from Mojo (name, property address, phones, e-mails) and paste them here."); setPrev(null); return; }
+    var have={}; L.forEach(function(l){ if((l.farm||"")===farm) have[streetKey(l.addr)]=1; });
+    var seen={}, add=[], dup=0;
+    recs.forEach(function(r){ var k=streetKey(r.addr); if(!k) return; if(seen[k]||have[k]){ dup++; return; } seen[k]=1; add.push(r); });
+    setPrev({add:add,dup:dup,total:recs.length}); setMsg("");
+  }
+  function toLead(r){
+    var nm=splitName(r.name); var em=uniq(r.emails), ph=uniq(r.phones); var extra=[];
+    if(em.length>2) extra.push("More emails: "+em.slice(2).join(", "));
+    if(ph.length>2) extra.push("More phones: "+ph.slice(2).join(", "));
+    if(r.co) extra.push("Co-owner: "+r.co);
+    if(r.mailing && streetKey(r.mailing)!==streetKey(r.addr)) extra.push("Mailing: "+r.mailing);
+    return { id:uid(), first:nm.first, last:nm.last, phone:ph[0]||"", phone2:ph[1]||"", email:em[0]||"", email2:em[1]||"",
+      addr:r.addr||"", addr2:"", zip:zipFrom(r.addr), type:"seller", temp:"cold", source:"Circle Prospecting", prospect:"circle",
+      farm:farm, farmListed:listed||"", mailing:r.mailing||"", situation:[], nurture:"active", contacted:false, circleBlast:null,
+      notes:extra.join(" · "), added:toDay(), lc:"", log:[] };
+  }
+  function doImport(){
+    if(!prev||!prev.add.length){ setMsg("Nothing new to add."); return; }
+    var nl=prev.add.map(toLead);
+    setLeads(function(p){ return nl.concat(p); });
+    setMsg("✓ Added "+nl.length+" neighbors to the \""+farm+"\" farm."+(prev.dup?" ("+prev.dup+" duplicates skipped)":""));
+    setPaste(""); setPrev(null);
+  }
+  function dl(name,text){ var b=new Blob([text],{type:"text/csv"}); var u=URL.createObjectURL(b); var a=document.createElement("a"); a.href=u; a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(u); }
+  function csvCell(v){ v=(v==null?"":String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+  function callCSV(list,fn){ var cols=["First Name","Last Name","Phone","Phone 2","Email","Address","City","State","Zip","Source"]; var rows=[cols.join(",")];
+    list.forEach(function(l){ var a=(l.addr||"").split(","); var st=(a[0]||"").trim(); var city=(a[1]||"").trim()||"Santa Rosa"; rows.push([l.first||"",l.last||"",l.phone||"",l.phone2||"",l.email||"",st,city,"CA",l.zip||"","Circle Prospecting"].map(csvCell).join(",")); });
+    dl(fn,rows.join("\n")); }
+  function mailCSV(list,fn){ var cols=["Name","Mailing Address"]; var rows=[cols.join(",")];
+    list.forEach(function(l){ var nm=((l.first||"")+" "+(l.last||"")).trim()||"Current Resident"; rows.push([nm,(l.mailing||l.addr||"")].map(csvCell).join(",")); });
+    dl(fn,rows.join("\n")); }
+  function slug(s){ return String(s).replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,""); }
+
+  return (
+    <div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>🎯 Circle Prospecting</div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:720}}>Farm the neighbors around a listing. When a home hits the market, reach the homes nearby with a “what’s your home worth?” touch — by <b>email</b>, a <b>call list</b>, or a <b>postcard mailing</b>. Each farm is grouped by the listing it surrounds. These neighbors stay here only — they never mix into your All Leads tab.</div>
+
+      <Card title="📥 Add neighbors to a farm">
+        <Fld label="Farm name (the listing these neighbors surround)"><input style={inp} value={farm} onChange={function(e){ setFarm(e.target.value); }} placeholder="2046 Northfield Dr" /></Fld>
+        <div style={{height:8}} />
+        <Fld label="Date the listing hit the market (optional)"><input style={inp} value={listed} onChange={function(e){ setListed(e.target.value); }} placeholder="2026-09-24" /></Fld>
+        <div style={{height:8}} />
+        <Fld label="Paste from Mojo — each contact’s name, property address, phones & e-mails"><textarea style={{...inp,minHeight:120,resize:"vertical",fontFamily:"inherit"}} value={paste} onChange={function(e){ setPaste(e.target.value); }} placeholder="Paste Mojo contact records here…" /></Fld>
+        <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+          <Btn onClick={doPreview}>🔍 Preview</Btn>
+          {prev && prev.add.length>0 && <Btn v="primary" onClick={doImport}>✓ Add {prev.add.length} to “{farm}”</Btn>}
+        </div>
+        {prev && <div style={{fontSize:12,color:C.t2,marginTop:8}}>Found {prev.total} record{prev.total===1?"":"s"} — <b>{prev.add.length} new</b>{prev.dup?", "+prev.dup+" duplicate"+(prev.dup===1?"":"s")+" skipped":""}.</div>}
+        {msg && <div style={{fontSize:12,color:C.ac,marginTop:8,lineHeight:1.5}}>{msg}</div>}
+      </Card>
+
+      {farmNames.length===0 && <Card title="No farms yet"><div style={{color:C.t3,fontSize:13}}>Add a farm above to get started.</div></Card>}
+
+      {farmNames.map(function(fn){
+        var list=farms[fn];
+        var recips=uniqEmailLeads(list.filter(function(l){ return !l.circleExclude; }));
+        var noEmail=list.filter(function(l){ return !(l.email||l.email2); }).length;
+        return (
+          <div key={fn} style={{marginBottom:20}}>
+            <div style={{fontSize:15,fontWeight:700,marginTop:10,marginBottom:4}}>🏡 {fn} <span style={{fontSize:12,fontWeight:400,color:C.t3}}>· {list.length} neighbors{recips.length?" · "+recips.length+" emailable":""}{noEmail?" · "+noEmail+" mail-only":""}</span></div>
+            <GroupEmailCard
+              title={"📧 Email this Farm ("+recips.length+" with email)"}
+              blurb={<span>Send a “what’s your home worth?” note to every neighbor in this farm that has an email — personalized, via <b>Brevo</b>, with an unsubscribe + your mailing address (CAN-SPAM). It never says whose listing it is. Your own home and the listing itself are excluded automatically.</span>}
+              recips={recips}
+              defSubject={CIRCLE_EMAIL_SUBJECT} defBody={CIRCLE_EMAIL_BODY}
+              tag={"circle-blast"} blastField={"circleBlast"} setLeads={setLeads} />
+            <Card title={"📋 Neighbors ("+list.length+")"}>
+              <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:10}}>
+                <Btn onClick={function(){ callCSV(list,"circle-"+slug(fn)+"-call-list.csv"); }}>⬇ Call list (Mojo CSV)</Btn>
+                <Btn onClick={function(){ mailCSV(list,"circle-"+slug(fn)+"-mailing.csv"); }}>⬇ Mailing list (postcards)</Btn>
+              </div>
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",minWidth:520,fontSize:12}}>
+                  <thead><tr>{["Address","Name","Phone","Email"].map(function(h){ return <th key={h} style={{textAlign:"left",fontSize:10,textTransform:"uppercase",color:C.t3,padding:"4px 6px",borderBottom:"1px solid "+C.br}}>{h}</th>; })}</tr></thead>
+                  <tbody>
+                    {list.map(function(l){ return <tr key={l.id} style={l.circleExclude?{opacity:.5}:null}>
+                      <td style={{padding:"4px 6px"}}>{(l.addr||"").split(",")[0]}</td>
+                      <td style={{padding:"4px 6px"}}>{((l.first||"")+" "+(l.last||"")).trim()||"—"}{l.circleExclude?" 🚫":""}</td>
+                      <td style={{padding:"4px 6px",fontFamily:"monospace",color:C.t2}}>{l.phone||"—"}</td>
+                      <td style={{padding:"4px 6px",color:C.t2}}>{l.email||l.email2||"—"}</td>
+                    </tr>; })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        );
+      })}
     </div>
   );
 }
