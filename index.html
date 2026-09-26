@@ -104,7 +104,8 @@ const hideFromLeads = l => {
   if(!l) return false;
   var p = l.prospect;
   if(p==="lost") return true;                                  // monitoring only — never in Leads
-  if(["expired","foreclosure","fsbo"].indexOf(p)<0) return false;
+  if(p==="expired") return true;                               // Expired list is SEPARATE — lives only in the Expired/FSBO/Lost tab, never in All Leads (until converted → Nurture, which clears prospect)
+  if(["foreclosure","fsbo"].indexOf(p)<0) return false;
   if(l.contacted) return false;                                // contacted = working = show in Leads
   return !!(l.mlNum || l.radarId || l.listName);               // hide only NEW auto-captured; manual entries stay
 };
@@ -127,7 +128,7 @@ const AGENT = {
 const BREVO_SENDER = "alicia@thealiciajohnsonhomes.com";
 
 // Bump this whenever the hub is updated, so you can confirm you're viewing the latest file.
-const BUILD = "Sep 21 · build 9";
+const BUILD = "Sep 25 · build 10";
 
 const TICON = { hot:"🔥", warm:"🌤", cold:"❄️" };
 const NLBL = { active:"Active","long-term":"Long-term",drip:"Drip",monthly:"Monthly",quarterly:"Quarterly",none:"None" };
@@ -1081,6 +1082,75 @@ function PanelCMA({cmas,setCmas,leads,setLeads}) {
   );
 }
 
+/* ── GROUP EMAIL to a prospect list (Expired / Foreclosure) — personalized + CAN-SPAM ── */
+var EXPIRED_EMAIL_SUBJECT = "About your home on {{street}}";
+var EXPIRED_EMAIL_BODY = "Hi {{first_name}},\n\nI noticed your home on {{street}} came off the market without selling.\n\nI'm not writing to ask for the listing. I put together a short breakdown of the four things I look for when a good home doesn't sell — presentation, showing access, where the price started, and whether it ever moved. It takes about two minutes to read.\n\nSee the four reasons: https://thealiciajohnsonhomes.com/expired\n\nOne of them is usually the whole story. If you read it and want the honest version for your specific house, text me and we'll walk it together before it goes back on.";
+var FORECLOSURE_EMAIL_SUBJECT = "Your options for the home on {{street}}";
+var FORECLOSURE_EMAIL_BODY = "Hi {{first_name}},\n\nI work with homeowners across Sonoma County, and I put together a straightforward guide on the options available when you're facing foreclosure — several of them let you stay in control and protect the equity you've built.\n\nRead it here: https://thealiciajohnsonhomes.com/guides/facing-foreclosure-options-sonoma-county/\n\nEverything stays confidential. If you'd like to talk through your specific situation, just reply or text me — the earlier you know your options, the more of them you have.";
+function streetOfList(l){ if(!l||!l.addr) return ""; return String(l.addr).split(",")[0].trim(); }
+function fillTokens(text,l){ return (text||"").replace(/\{\{\s*first_name\s*\}\}/gi,(l&&l.first)?l.first:"there").replace(/\{\{\s*first\s*\}\}/gi,(l&&l.first)?l.first:"there").replace(/\{\{\s*street\s*\}\}/gi,streetOfList(l)||"your street"); }
+function bodyToLinkedHtml(text){ var esc=function(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }; var linkify=function(s){ return s.replace(/(^|[\s(>])((https?:\/\/)?(www\.)?[a-z0-9-]+\.(?:com|net|org|io|co)(?:\/[^\s<)]*)?)/gi,function(m,pre,url){ if(url.indexOf("@")>=0) return m; var href=/^https?:\/\//i.test(url)?url:("https://"+url); return pre+"<a href=\""+href+"\" style=\"color:#2a5a8c;font-weight:bold\">"+url+"</a>"; }); }; return (text||"").split(/\n\n+/).map(function(p){ return "<p style=\"margin:0 0 14px\">"+linkify(esc(p)).replace(/\n/g,"<br>")+"</p>"; }).join(""); }
+function complianceFooterHtml(mailAddr){ var esc=function(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }; var unsub="mailto:"+AGENT.email+"?subject="+encodeURIComponent("Unsubscribe")+"&body="+encodeURIComponent("Please remove me from your email list."); return "<div style=\"max-width:560px;margin:10px auto 0;padding:0 12px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#999999;line-height:1.7\">"+esc(mailAddr||(AGENT.co+" · "+AGENT.city))+"<br>You're receiving this because we've connected about real estate in your area. <a href=\""+unsub+"\" style=\"color:#999999;text-decoration:underline\">Unsubscribe</a> &middot; or reply STOP and I'll remove you right away.</div>"; }
+function uniqEmailLeads(list){ var seen={},out=[]; (list||[]).forEach(function(l){ var e=((l.email||l.email2||"")+"").trim().toLowerCase(); if(!e||e.indexOf("@")<1||/noemail/i.test(e)) return; if(seen[e]) return; seen[e]=1; out.push(l); }); return out; }
+var GROUP_SIG_HTML = '<table cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;margin-top:6px;"><tr><td style="padding-right:14px;vertical-align:top;"><img src="https://thealiciajohnsonhomes.com/images/alicia-headshot.jpg" alt="Alicia Johnson, Excellerate Real Estate" width="64" height="108" style="border-radius:6px;display:block;"></td><td style="vertical-align:top;font-size:13px;color:#333;line-height:1.5;"><strong style="font-size:15px;color:#1a1a1a;">Alicia Johnson</strong><br>REALTOR&reg; &middot; Excellerate Real Estate<br>707-849-6775 &middot; <a href="mailto:alicia@excelleraterealestate.com" style="color:#2a5a8c;">alicia@excelleraterealestate.com</a><br><a href="https://thealiciajohnsonhomes.com" style="color:#2a5a8c;">thealiciajohnsonhomes.com</a> &middot; DRE #02272644</td></tr></table>';
+function groupEmailHtml(body,l,mailAddr){ return "<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#222;max-width:560px;margin:0 auto\">"+bodyToLinkedHtml(fillTokens(body,l))+GROUP_SIG_HTML+"</div>"+complianceFooterHtml(mailAddr); }
+
+// Reusable "email this group" card — compose, personalize ({{first_name}}/{{street}}), send via Brevo one-by-one with a CAN-SPAM footer.
+function GroupEmailCard({title, blurb, recips, defSubject, defBody, tag, blastField, setLeads}){
+  var [emailOpen,setEmailOpen] = useState(false);
+  var [subj,setSubj] = useState(defSubject);
+  var [body,setBody] = useState(defBody);
+  var [mailAddr,setMailAddr] = useState(AGENT.co+" · "+AGENT.city);
+  var [sending,setSending] = useState(false);
+  var [blastMsg,setBlastMsg] = useState("");
+  function sendBlast(){
+    if(!recips.length){ setBlastMsg("⚠️ No leads in this group have an email address yet — add emails on their lead cards first."); return; }
+    setSending(true); setBlastMsg("");
+    var ok=0, fail=0, done=0;
+    recips.reduce(function(chain,l){
+      return chain.then(function(){
+        var to=[{email:(l.email||l.email2).trim(), name:((l.first||"")+" "+(l.last||"")).trim()}];
+        return callBrevo("send",{to:to, subject:fillTokens(subj,l), html:groupEmailHtml(body,l,mailAddr), senderEmail:BREVO_SENDER, senderName:AGENT.name, replyTo:AGENT.email, tags:[tag]})
+          .then(function(res){ done++; if(res && res.ok) ok++; else fail++; setBlastMsg("Sending… "+done+"/"+recips.length+" ("+ok+" sent"+(fail?", "+fail+" failed":"")+")"); });
+      });
+    }, Promise.resolve()).then(function(){
+      setSending(false);
+      if(ok>0 && setLeads){ var day=toDay(); var ids={}; recips.forEach(function(l){ ids[l.id]=1; });
+        setLeads(function(p){ return p.map(function(x){ return ids[x.id]?Object.assign({},x,{[blastField]:day, brevoSynced:x.brevoSynced||day}):x; }); }); }
+      if(fail===0) setBlastMsg("✓ Sent to "+ok+" lead"+(ok===1?"":"s")+" via Brevo. Track opens & clicks at brevo.com.");
+      else if(ok===0) setBlastMsg("⚠️ Couldn't send. Make sure the 'brevo' function is deployed and BREVO_API_KEY is set. ("+fail+" failed)");
+      else setBlastMsg("✓ Sent "+ok+", but "+fail+" failed — retry or check those addresses.");
+    });
+  }
+  return (
+    <Card title={title}>
+      <div style={{fontSize:11.5,color:C.t2,lineHeight:1.5,marginBottom:8}}>{blurb}</div>
+      {!emailOpen ? (
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <Btn v="primary" onClick={function(){ setEmailOpen(true); }}>📧 Compose group email</Btn>
+          <span style={{fontSize:11,color:C.t3}}>{recips.length>0 ? (recips.length+" recipient"+(recips.length===1?"":"s")+" ready") : "No leads in this group have an email yet"}</span>
+        </div>
+      ) : (
+        <div>
+          <Fld label="Subject"><input style={inp} value={subj} onChange={function(e){ setSubj(e.target.value); }} /></Fld>
+          <div style={{height:8}} />
+          <Fld label={"Message — {{first_name}} and {{street}} fill in per lead"}><textarea style={{...inp,minHeight:200,resize:"vertical",lineHeight:1.55,fontFamily:"inherit"}} value={body} onChange={function(e){ setBody(e.target.value); }} /></Fld>
+          <div style={{height:8}} />
+          <Fld label="Your mailing address (shown in the footer — required by CAN-SPAM law)"><input style={inp} value={mailAddr} onChange={function(e){ setMailAddr(e.target.value); }} placeholder="123 Main St, Santa Rosa, CA 95401" /></Fld>
+          <div style={{fontSize:11,color:C.t3,margin:"8px 0 4px"}}>👀 Preview{recips[0]?" (for "+recips[0].first+" "+recips[0].last+")":""}:</div>
+          <div style={{border:"1px solid "+C.br,borderRadius:8,padding:"8px 10px",background:C.s2,fontSize:12.5,whiteSpace:"pre-wrap",lineHeight:1.5,maxHeight:180,overflow:"auto"}}>{fillTokens(subj,recips[0])+"\n\n"+fillTokens(body,recips[0])}</div>
+          <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
+            <Btn v="primary" onClick={sendBlast}>{sending?"⏳ Sending…":("📤 Send to "+recips.length+" lead"+(recips.length===1?"":"s"))}</Btn>
+            <Btn onClick={function(){ setEmailOpen(false); }}>Cancel</Btn>
+            <Btn onClick={function(){ setSubj(defSubject); setBody(defBody); }}>↺ Reset to template</Btn>
+          </div>
+        </div>
+      )}
+      {blastMsg && <div style={{fontSize:12,color:blastMsg.indexOf("⚠️")===0?C.ro:C.ac,marginTop:10,fontWeight:500}}>{blastMsg}</div>}
+    </Card>
+  );
+}
+
 function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   // Auto-captured MLS expireds (carry an mlNum) start in their own "new — cold call" inbox.
   // Once you tap ✓ Contacted they move into your regular watched-Expired list, alongside ones you added by hand.
@@ -1133,7 +1203,13 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   return (
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>🎯 Expired / Foreclosure / FSBO / Lost Watchlist</div>
-      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:680}}>Homeowners worth prospecting. Add anyone from their lead card: <b>🎯 Expired</b> (didn't sell), <b>🎯 FSBO</b> (for sale by owner), or <b>🚫 Lost</b> (signed with another agent — watch for their listing to expire, then swoop back in).</div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:680}}>Homeowners worth prospecting. Add anyone from their lead card: <b>🎯 Expired</b> (didn't sell), <b>🎯 FSBO</b> (for sale by owner), or <b>🚫 Lost</b> (signed with another agent — watch for their listing to expire, then swoop back in). <b>Expired leads stay here only</b> — they never mix into your All Leads tab.</div>
+      <GroupEmailCard
+        title={"📧 Email the Expired List (" + uniqEmailLeads(expiredNew.concat(expired)).length + " with email)"}
+        blurb={<span>Send your expired outreach to <b>every expired lead that has an email</b> in one click. Each email is personalized (first name + street), sent through <b>Brevo</b> (tracked opens &amp; clicks), with an unsubscribe link + your mailing address so it's CAN-SPAM compliant. Duplicate addresses are skipped automatically.</span>}
+        recips={uniqEmailLeads(expiredNew.concat(expired))}
+        defSubject={EXPIRED_EMAIL_SUBJECT} defBody={EXPIRED_EMAIL_BODY}
+        tag="expired-blast" blastField="expiredBlast" setLeads={setLeads} />
       <Card title={"📥 New Expired — Cold Call (" + expiredNew.length + ")"}>
         <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Fresh expired listings auto-pulled from your MLS emails each morning — homes that didn't sell. Look up the owner and cold call. Tap <b>✓ Contacted</b> once you've called and it moves to your watched list below.</div>
         {expiredNew.length===0 ? <div style={{color:C.t3,fontSize:13}}>None right now — new expireds from your MLS email land here automatically.</div> : expiredNew.map(row)}
@@ -1142,6 +1218,12 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
         <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Expireds you've already contacted or added by hand — the ones you're actively working.</div>
         {expired.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — cold-call a new expired above (✓ Contacted), or tap 🎯 Expired on any lead.</div> : expired.map(row)}
       </Card>
+      <GroupEmailCard
+        title={"📧 Email the Foreclosure / Auction List (" + uniqEmailLeads(foreNew.concat(foreWork)).length + " with email)"}
+        blurb={<span>Reach every <b>foreclosure · pre-foreclosure · auction · divorce</b> prospect that has an email. The template links to your <b>“Facing Foreclosure: Options in Sonoma County”</b> guide — educational and confidential, personalized per lead, sent via Brevo with an unsubscribe + mailing address (CAN-SPAM). Most of these come in address-only, so add an email on the lead card to include them here.</span>}
+        recips={uniqEmailLeads(foreNew.concat(foreWork))}
+        defSubject={FORECLOSURE_EMAIL_SUBJECT} defBody={FORECLOSURE_EMAIL_BODY}
+        tag="foreclosure-blast" blastField="foreclosureBlast" setLeads={setLeads} />
       <Card title={"🏚️ New Prospect Leads — Cold Call (" + foreNew.length + ")"}>
         <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Motivated-seller properties auto-pulled from your <b>PropertyRadar</b> & <b>Auction.com</b> lists — <b>Foreclosure · Pre-Foreclosure · Divorce · Auction</b>, etc. Each lead is tagged with the list it came from (shown on the row). You get the address only — <b>open each to add the owner's name & phone</b>, then cold call. Tap <b>✓ Contacted</b> once you've reached out.</div>
         {foreNew.length===0 ? <div style={{color:C.t3,fontSize:13}}>None right now — new properties from your PropertyRadar / Auction.com lists land here automatically.</div> : foreNew.map(row)}
