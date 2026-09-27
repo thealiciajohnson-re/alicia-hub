@@ -2322,6 +2322,10 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                 <input style={{...inp,marginBottom:4,fontSize:12,fontFamily:"monospace"}} placeholder="Phone 2 (optional)" value={phone2Draft} onChange={function(e){setPhone2Draft(e.target.value);}} onBlur={function(){saveContact("phone2",phone2Draft);}} />
                 <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Email" value={emailDraft} onChange={function(e){setEmailDraft(e.target.value);}} onBlur={function(){saveContact("email",emailDraft);}} />
                 <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Email 2 (optional)" value={email2Draft} onChange={function(e){setEmail2Draft(e.target.value);}} onBlur={function(){saveContact("email2",email2Draft);}} />
+                <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11.5,color:modal.smsConsent?C.ac:C.t2,cursor:"pointer",margin:"2px 0 6px"}} title="Only check if they agreed to receive texts — TCPA">
+                  <input type="checkbox" checked={!!modal.smsConsent} onChange={function(e){ saveContact("smsConsent",e.target.checked); }} />
+                  📱 OK to text (opted in)
+                </label>
                 <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Primary home address (where they live)" value={addrDraft} onChange={function(e){setAddrDraft(e.target.value);}} onBlur={function(){saveContact("addr",addrDraft);}} />
                 <input style={{...inp,marginBottom:4,fontSize:12}} placeholder="Rental / 2nd property they own (optional)" value={addr2Draft} onChange={function(e){setAddr2Draft(e.target.value);}} onBlur={function(){saveContact("addr2",addr2Draft);}} />
                 <input style={{...inp,marginBottom:4,fontSize:12,fontFamily:"monospace"}} placeholder="ZIP code (for local market numbers)" value={zipDraft} onChange={function(e){setZipDraft(e.target.value);}} onBlur={function(){saveContact("zip",zipDraft.trim());}} />
@@ -2543,7 +2547,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
 
 /* ── ADD LEAD ────────────────────────────────────────────────── */
 function PanelAddLead({addLead,setTab}) {
-  var blank = {first:"",last:"",phone:"",phone2:"",email:"",email2:"",ig:"",tiktok:"",addr:"",addr2:"",zip:"",type:"buyer",temp:"warm",source:"Zillow",situation:[],auctionDate:"",expiredDate:"",nurture:"active",timeline:"0–3 months",fdays:3,notes:"",autoNurture:"off",lastNurtured:null,bday:"",sendIntro:true};
+  var blank = {first:"",last:"",phone:"",phone2:"",email:"",email2:"",ig:"",tiktok:"",addr:"",addr2:"",zip:"",type:"buyer",temp:"warm",source:"Zillow",situation:[],auctionDate:"",expiredDate:"",nurture:"active",timeline:"0–3 months",fdays:3,notes:"",autoNurture:"off",lastNurtured:null,bday:"",sendIntro:true,smsConsent:false};
   var [form,setForm] = useState(blank); var [st,setSt] = useState(""); var [aiTxt,setAT] = useState(""); var [aiLd,setAL] = useState(false);
   function fld(k){ return function(e){ setForm(function(p){ return {...p,[k]:e.target.value}; }); }; }
   function save(withAI) {
@@ -2590,6 +2594,12 @@ function PanelAddLead({addLead,setTab}) {
           <Fld label="📷 Instagram username"><input style={inp} placeholder="@username" value={form.ig} onChange={fld("ig")} /></Fld>
           <Fld label="🎵 TikTok username"><input style={inp} placeholder="@username" value={form.tiktok} onChange={fld("tiktok")} /></Fld>
         </Row>
+        <div style={{margin:"6px 0 10px",padding:"8px 10px",background:C.s2,borderRadius:8,border:"1px solid "+C.br}}>
+          <label style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12.5,color:C.t2,cursor:"pointer",lineHeight:1.4}}>
+            <input type="checkbox" checked={!!form.smsConsent} onChange={function(e){ var v=e.target.checked; setForm(function(p){ return {...p,smsConsent:v}; }); }} style={{marginTop:2}} />
+            <span>📱 <b>This lead agreed to receive texts</b> (opted in). Only check this if they said yes — texting without consent violates TCPA. Required before any SMS is sent.</span>
+          </label>
+        </div>
         <div style={{fontSize:11,color:C.t3,marginTop:-2,marginBottom:2}}>💡 Only have a username? Just fill in Instagram or TikTok — you can save the lead with no name, phone, or email. The handle becomes their name until you learn it.</div>
         <Row cols="2fr 1fr 1fr">
           <Fld label="Primary home address"><input style={inp} placeholder="123 Main St, Santa Rosa" value={form.addr} onChange={fld("addr")} /></Fld>
