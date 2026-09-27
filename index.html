@@ -1247,14 +1247,19 @@ function GroupEmailCard({title, blurb, recips, defSubject, defBody, tag, blastFi
 function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   // Auto-captured MLS expireds (carry an mlNum) start in their own "new — cold call" inbox.
   // Once you tap ✓ Contacted they move into your regular watched-Expired list, alongside ones you added by hand.
-  var expiredNew = (leads||[]).filter(function(l){ return l.prospect==="expired" && l.mlNum && !l.contacted; });
-  var expired = (leads||[]).filter(function(l){ return l.prospect==="expired" && !(l.mlNum && !l.contacted); });
+  // soldOff = a watchlist property that SOLD (per the daily accuracy check) — kept as a record but hidden from cold-call lists.
+  var expiredNew = (leads||[]).filter(function(l){ return l.prospect==="expired" && l.mlNum && !l.contacted && !l.soldOff; });
+  var expired = (leads||[]).filter(function(l){ return l.prospect==="expired" && !(l.mlNum && !l.contacted) && !l.soldOff; });
   // Auto-captured foreclosures (from PropertyRadar/Auction, marked with listName) start in the cold-call inbox.
   // Manually-flagged foreclosures (no listName) go straight to the working/watching list.
-  var foreNew = (leads||[]).filter(function(l){ return l.prospect==="foreclosure" && l.listName && !l.contacted; });
-  var foreWork = (leads||[]).filter(function(l){ return l.prospect==="foreclosure" && !(l.listName && !l.contacted); });
-  var fsbo = (leads||[]).filter(function(l){ return l.prospect==="fsbo"; });
-  var lost = (leads||[]).filter(function(l){ return l.prospect==="lost"; }).sort(function(a,b){ return (a.listingExpires||"9999-99")<(b.listingExpires||"9999-99")?-1:1; });
+  var foreNew = (leads||[]).filter(function(l){ return l.prospect==="foreclosure" && l.listName && !l.contacted && !l.soldOff; });
+  var foreWork = (leads||[]).filter(function(l){ return l.prospect==="foreclosure" && !(l.listName && !l.contacted) && !l.soldOff; });
+  var fsbo = (leads||[]).filter(function(l){ return l.prospect==="fsbo" && !l.soldOff; });
+  var lost = (leads||[]).filter(function(l){ return l.prospect==="lost" && !l.soldOff; }).sort(function(a,b){ return (a.listingExpires||"9999-99")<(b.listingExpires||"9999-99")?-1:1; });
+  // 👁 Watching = active listings Alicia is monitoring (e.g. an expired that relisted with another agent). She can't
+  // solicit while active — watch for it to expire again (=prospect) or sell (=drops off, marked sold by the daily check).
+  var watching = (leads||[]).filter(function(l){ return l.watch===true && l.watchStatus!=="sold"; })
+    .sort(function(a,b){ return (b.watchDom||0)-(a.watchDom||0); });
   function open(l){ if(setFocusLead) setFocusLead(l.id); setTab("leads"); }
   function toNurture(l){ if(setLeads) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,prospect:"",nurture:"monthly",temp:"warm",log:[...(x.log||[]),toDay()+" — Converted from Expired to nurture"]}:x; }); }); }
   function wonBack(l){ if(setLeads) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,prospect:"",contacted:true,temp:"warm",nurture:x.nurture||"active",log:[...(x.log||[]),toDay()+" — Won back from Lost → returned to Leads"]}:x; }); }); }
@@ -1297,6 +1302,24 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>🎯 Expired / Foreclosure / FSBO / Lost Watchlist</div>
       <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:680}}>Homeowners worth prospecting. Add anyone from their lead card: <b>🎯 Expired</b> (didn't sell), <b>🎯 FSBO</b> (for sale by owner), or <b>🚫 Lost</b> (signed with another agent — watch for their listing to expire, then swoop back in). <b>Expired leads stay here only</b> — they never mix into your All Leads tab.</div>
+      {watching.length>0 && <Card title={"👁 Watching — Active Listings (" + watching.length + ")"}>
+        <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Listings you're monitoring — usually an expired that <b>relisted with another agent</b>. You can't solicit the listing while it's active, so watch for it to <b>expire again</b> (your moment) or <b>sell</b> (drops off automatically). The daily accuracy check updates these each morning.</div>
+        {watching.map(function(l){
+          var st = l.watchStatus||"active";
+          var badge = st==="expired" ? {t:"🎯 Expired again — call now",c:C.ro} : st==="pending" ? {t:"📝 Pending",c:C.go} : {t:"🟢 Active",c:C.t2};
+          return (
+            <div key={l.id} onClick={function(){ open(l); }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid "+C.br,cursor:"pointer"}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:600}}>{l.first} {l.last}{l.phone?<span style={{fontSize:11,fontWeight:400,color:C.t3}}> · {l.phone}</span>:null}</div>
+                <div style={{fontSize:11,color:C.t3}}>{l.watchAddr||l.addr||"—"}{l.watchMln?" · MLS "+l.watchMln:""}{l.watchDom?" · "+l.watchDom+" DOM":""}{l.watchListedDate?" · listed "+fmtDate(l.watchListedDate):""}</div>
+                {l.watchNote?<div style={{fontSize:11,marginTop:1,color:C.t3}}>{l.watchNote}</div>:null}
+              </div>
+              <span style={{fontSize:11,fontWeight:700,color:badge.c,whiteSpace:"nowrap"}}>{badge.t}</span>
+              <span style={{fontSize:11,color:C.ac}}>Open →</span>
+            </div>
+          );
+        })}
+      </Card>}
       <GroupEmailCard
         title={"📧 Email the Expired List (" + uniqEmailLeads(expiredNew.concat(expired)).length + " with email)"}
         blurb={<span>Send your expired outreach to <b>every expired lead that has an email</b> in one click. Each email is personalized (first name + street), sent through <b>Brevo</b> (tracked opens &amp; clicks), with an unsubscribe link + your mailing address so it's CAN-SPAM compliant. Duplicate addresses are skipped automatically.</span>}
