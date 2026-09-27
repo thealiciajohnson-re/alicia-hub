@@ -139,7 +139,7 @@ const NURDAYS = { biweekly:14, monthly:30 };
 const NURLBL  = { off:"Off", biweekly:"Every 2 weeks", monthly:"Monthly" };
 function nurtureOn(l){ return l && l.autoNurture && l.autoNurture!=="off" && NURDAYS[l.autoNurture]; }
 // 📬 Monthly "what sold near you" email (last day of month). ON by default for anyone with an email + street address; soldMonthly:false switches it off.
-function soldReportOn(l){ if(!l||l.soldMonthly===false) return false; var e=(l.email||"").trim(), a=(l.addr||"").trim(); return e.indexOf("@")>0 && !/noemail/i.test(e) && /^\d+\s+\S/.test(a); }
+function soldReportOn(l){ if(!l||l.soldMonthly===false) return false; if(l.type==="closed"||l.closeDate) return false; if(hideFromLeads(l)) return false; var e=(l.email||"").trim(), a=(l.addr||"").trim(), a2=(l.addr2||"").trim(); return e.indexOf("@")>0 && !/noemail/i.test(e) && (/^\d+\s+\S/.test(a)||/^\d+\s+\S/.test(a2)); }
 function nurtureDue(l){
   if (!nurtureOn(l)) return false;
   if (!l.lastNurtured) return true;
@@ -2300,7 +2300,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br}}><Tag t={l.type}>{l.type}</Tag></td>
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br}}><Tag t={l.temp}>{TICON[l.temp]} {l.temp}</Tag></td>
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br,fontSize:12,color:C.t2}}>{l.source}</td>
-                    <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br,fontSize:12,color:C.t2}}>{NLBL[l.nurture]||l.nurture}{nurtureOn(l)?<span title={"Auto-nurture: "+NURLBL[l.autoNurture]+(nurtureDue(l)?" (due now)":"")} style={{marginLeft:4,color:nurtureDue(l)?C.go:C.t3}}>🔄</span>:null}{soldReportOn(l)?<span title="On the monthly sold report (what sold near their home, last day of each month)" style={{marginLeft:4}}>📬</span>:null}{(l.type==="closed"||l.closeDate)?<span title="Past client — already bought/sold. Kept in your leads and off prospecting; still gets the monthly market email." style={{marginLeft:4}}>🔑</span>:null}</td>
+                    <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br,fontSize:12,color:C.t2}}>{NLBL[l.nurture]||l.nurture}{nurtureOn(l)?<span title={"Auto-nurture: "+NURLBL[l.autoNurture]+(nurtureDue(l)?" (due now)":"")} style={{marginLeft:4,color:nurtureDue(l)?C.go:C.t3}}>🔄</span>:null}{soldReportOn(l)?<span title="On the monthly sold report (what sold near their home, last day of each month)" style={{marginLeft:4}}>📬</span>:null}{(l.type==="closed"||l.closeDate)?<span title="Past client — already bought/sold. Kept in your leads and off prospecting. Does NOT get the monthly sold report or neighborhood alerts; still gets anniversary check-ins." style={{marginLeft:4}}>🔑</span>:null}</td>
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br,fontSize:11,fontFamily:"monospace",color:l.fu<=toDay()?C.ro:C.t3}}>{fmtDate(l.fu)}</td>
                     <td style={{padding:"8px 10px",borderBottom:"1px solid "+C.br}}>
                       <div style={{display:"flex",gap:5,justifyContent:"flex-end"}}>
