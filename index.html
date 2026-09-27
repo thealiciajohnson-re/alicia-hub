@@ -1345,8 +1345,30 @@ function PanelCircle({leads,setLeads}) {
   var [prev,setPrev] = useState(null);
   var [msg,setMsg] = useState("");
 
+  var EXCL={"2046 northfield dr":1,"2085 northfield dr":1};   // the listing itself + Alicia's own home — never email/mail
   function zipFrom(a){ var m=String(a||"").match(/\b(\d{5})\b/); return m?m[1]:""; }
   function streetKey(a){ return String(a||"").toLowerCase().replace(/,.*/,"").replace(/\s+/g," ").trim(); }
+  function recsFromCSV(text){
+    var lines=String(text).replace(/\r/g,"").split("\n").filter(function(x){ return x.trim(); });
+    if(!lines.length) return [];
+    var start=/property_address/i.test(lines[0])?1:0;
+    function cells(line){ var out=[],cur="",q=false; for(var i=0;i<line.length;i++){ var c=line[i]; if(q){ if(c=='"'){ if(line[i+1]=='"'){cur+='"';i++;} else q=false; } else cur+=c; } else { if(c=='"')q=true; else if(c==','){ out.push(cur); cur=""; } else cur+=c; } } out.push(cur); return out; }
+    var recs=[];
+    for(var i=start;i<lines.length;i++){ var c=cells(lines[i]); var addr=(c[0]||"").trim(); if(!addr) continue;
+      var nm=(c[1]||"").split(" / "); var owner=(nm[0]||"").trim(); var co=(nm[1]||"").trim();
+      var phones=(c[2]||"").split(";").map(function(x){return x.trim();}).filter(Boolean);
+      var emails=(c[3]||"").split(";").map(function(x){return x.trim();}).filter(function(x){return x.indexOf("@")>0;});
+      recs.push({name:owner,co:co,addr:addr,mailing:"",phones:phones,emails:emails}); }
+    return recs;
+  }
+  function stageRecs(recs){
+    if(!recs.length){ setMsg("Couldn't read any rows. Make sure it's the Circle CSV (columns: property_address, name, phones, emails)."); setPrev(null); return; }
+    var have={}; L.forEach(function(l){ if((l.farm||"")===farm) have[streetKey(l.addr)]=1; });
+    var seen={},add=[],dup=0;
+    recs.forEach(function(r){ var k=streetKey(r.addr); if(!k) return; if(seen[k]||have[k]){ dup++; return; } seen[k]=1; add.push(r); });
+    setPrev({add:add,dup:dup,total:recs.length}); setMsg("");
+  }
+  function onFile(e){ var f=e.target.files&&e.target.files[0]; if(!f) return; var rd=new FileReader(); rd.onload=function(){ try{ stageRecs(recsFromCSV(String(rd.result||""))); }catch(err){ setMsg("Couldn't read that file."); } }; rd.readAsText(f); e.target.value=""; }
   function splitName(nm){ nm=String(nm||"").trim(); if(!nm) return {first:"",last:""}; var p=nm.split(/\s+/); if(p.length===1) return {first:p[0],last:""}; return {first:p[0], last:p.slice(1).join(" ")}; }
   function uniq(a){ var s={},o=[]; (a||[]).forEach(function(x){ x=String(x||"").trim(); if(x && !s[x.toLowerCase()]){ s[x.toLowerCase()]=1; o.push(x);} }); return o; }
 
@@ -1379,14 +1401,7 @@ function PanelCircle({leads,setLeads}) {
     push();
     return recs;
   }
-  function doPreview(){
-    var recs=parseMojo(paste);
-    if(!recs.length){ setMsg("Couldn't find any records. Copy contacts from Mojo (name, property address, phones, e-mails) and paste them here."); setPrev(null); return; }
-    var have={}; L.forEach(function(l){ if((l.farm||"")===farm) have[streetKey(l.addr)]=1; });
-    var seen={}, add=[], dup=0;
-    recs.forEach(function(r){ var k=streetKey(r.addr); if(!k) return; if(seen[k]||have[k]){ dup++; return; } seen[k]=1; add.push(r); });
-    setPrev({add:add,dup:dup,total:recs.length}); setMsg("");
-  }
+  function doPreview(){ stageRecs(parseMojo(paste)); }
   function toLead(r){
     var nm=splitName(r.name); var em=uniq(r.emails), ph=uniq(r.phones); var extra=[];
     if(em.length>2) extra.push("More emails: "+em.slice(2).join(", "));
@@ -1396,7 +1411,7 @@ function PanelCircle({leads,setLeads}) {
     return { id:uid(), first:nm.first, last:nm.last, phone:ph[0]||"", phone2:ph[1]||"", email:em[0]||"", email2:em[1]||"",
       addr:r.addr||"", addr2:"", zip:zipFrom(r.addr), type:"seller", temp:"cold", source:"Circle Prospecting", prospect:"circle",
       farm:farm, farmListed:listed||"", mailing:r.mailing||"", situation:[], nurture:"active", contacted:false, circleBlast:null,
-      notes:extra.join(" · "), added:toDay(), lc:"", log:[] };
+      circleExclude:!!EXCL[streetKey(r.addr)], notes:extra.join(" · "), added:toDay(), lc:"", log:[] };
   }
   function doImport(){
     if(!prev||!prev.add.length){ setMsg("Nothing new to add."); return; }
@@ -1425,9 +1440,11 @@ function PanelCircle({leads,setLeads}) {
         <div style={{height:8}} />
         <Fld label="Date the listing hit the market (optional)"><input style={inp} value={listed} onChange={function(e){ setListed(e.target.value); }} placeholder="2026-09-24" /></Fld>
         <div style={{height:8}} />
+        <Fld label="Import a CSV file (columns: property_address, name, phones, emails)"><input type="file" accept=".csv,text/csv" onChange={onFile} style={{fontSize:12}} /></Fld>
+        <div style={{fontSize:11,color:C.t3,margin:"6px 0 10px"}}>— or —</div>
         <Fld label="Paste from Mojo — each contact’s name, property address, phones & e-mails"><textarea style={{...inp,minHeight:120,resize:"vertical",fontFamily:"inherit"}} value={paste} onChange={function(e){ setPaste(e.target.value); }} placeholder="Paste Mojo contact records here…" /></Fld>
         <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
-          <Btn onClick={doPreview}>🔍 Preview</Btn>
+          <Btn onClick={doPreview}>🔍 Preview paste</Btn>
           {prev && prev.add.length>0 && <Btn v="primary" onClick={doImport}>✓ Add {prev.add.length} to “{farm}”</Btn>}
         </div>
         {prev && <div style={{fontSize:12,color:C.t2,marginTop:8}}>Found {prev.total} record{prev.total===1?"":"s"} — <b>{prev.add.length} new</b>{prev.dup?", "+prev.dup+" duplicate"+(prev.dup===1?"":"s")+" skipped":""}.</div>}
