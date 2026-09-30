@@ -1468,7 +1468,7 @@ function PanelCircle({leads,setLeads}) {
   return (
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>🎯 Circle Prospecting</div>
-      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:720}}>Farm the neighbors around a listing. When a home hits the market, reach the homes nearby with a “what’s your home worth?” touch — by <b>email</b>, a <b>call list</b>, or a <b>postcard mailing</b>. Each farm is grouped by the listing it surrounds. These neighbors stay here only — they never mix into your All Leads tab.</div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:720}}>Farm the neighbors around a listing. When a home hits the market, reach the homes nearby with a “what’s your home worth?” touch — by <b>email</b>, a <b>call list</b>, or a <b>postcard mailing</b>. Each farm is grouped by the listing it surrounds. When you start a real conversation with a neighbor, click <b>➕ Add to Leads</b> on their row to move them into your All Leads tab.</div>
 
       <Card title="📥 Add neighbors to a farm">
         <Fld label="Farm name (the listing these neighbors surround)"><input style={inp} value={farm} onChange={function(e){ setFarm(e.target.value); }} placeholder="2046 Northfield Dr" /></Fld>
@@ -1508,13 +1508,14 @@ function PanelCircle({leads,setLeads}) {
               </div>
               <div style={{overflowX:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse",minWidth:520,fontSize:12}}>
-                  <thead><tr>{["Address","Name","Phone","Email"].map(function(h){ return <th key={h} style={{textAlign:"left",fontSize:10,textTransform:"uppercase",color:C.t3,padding:"4px 6px",borderBottom:"1px solid "+C.br}}>{h}</th>; })}</tr></thead>
+                  <thead><tr>{["Address","Name","Phone","Email",""].map(function(h,hi){ return <th key={h||("act"+hi)} style={{textAlign:"left",fontSize:10,textTransform:"uppercase",color:C.t3,padding:"4px 6px",borderBottom:"1px solid "+C.br}}>{h}</th>; })}</tr></thead>
                   <tbody>
                     {list.map(function(l){ return <tr key={l.id} style={l.circleExclude?{opacity:.5}:null}>
                       <td style={{padding:"4px 6px"}}>{(l.addr||"").split(",")[0]}</td>
                       <td style={{padding:"4px 6px"}}>{((l.first||"")+" "+(l.last||"")).trim()||"—"}{l.circleExclude?" 🚫":""}</td>
                       <td style={{padding:"4px 6px",fontFamily:"monospace",color:C.t2}}>{l.phone||"—"}</td>
                       <td style={{padding:"4px 6px",color:C.t2}}>{l.email||l.email2||"—"}</td>
+                      <td style={{padding:"4px 6px",textAlign:"right",whiteSpace:"nowrap"}}>{!l.circleExclude && <Btn onClick={function(){ var nm=((l.first||"")+" "+(l.last||"")).trim()||(l.addr||"").split(",")[0]; if(!window.confirm("Add "+nm+" to your All Leads tab?\n\nThey'll move out of Circle Prospecting and show up in All Leads, marked as contacted.")) return; setLeads(function(p){ return p.map(function(x){ return x.id===l.id ? Object.assign({},x,{ prospect:"", contacted:true, temp:"warm", lc:toDay(), log:(x.log||[]).concat(toDay()+" — ➕ Moved to All Leads from Circle Prospecting"+(x.farm?" ("+x.farm+")":"")) }) : x; }); }); }}>➕ Add to Leads</Btn>}</td>
                     </tr>; })}
                   </tbody>
                 </table>
