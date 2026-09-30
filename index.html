@@ -203,6 +203,13 @@ function areaOf(l){ return cityOf(l) || "Sonoma County"; }
 function normName(x){ return (((x.first||"")+" "+(x.last||"")).toLowerCase().replace(/[^a-z0-9]+/g," ")).trim(); }
 function digitsOnly(s){ return (s||"").replace(/\D/g,""); }
 function leadsMatch(a,b){
+  // Circle-prospecting neighbors are per-ADDRESS mailing targets. One owner can own several homes
+  // on a farm (same name/email/phone) — those are distinct doors and must NEVER be merged, or the
+  // dedupe-on-load quietly deletes farm addresses. Different street address = different lead.
+  if(a.prospect==="circle" && b.prospect==="circle"){
+    var aStreet=(a.addr||"").split(",")[0].trim().toLowerCase(), bStreet=(b.addr||"").split(",")[0].trim().toLowerCase();
+    if(aStreet && bStreet && aStreet!==bStreet) return false;
+  }
   if(a.fubId && b.fubId && a.fubId===b.fubId) return true;
   var ae=(a.email||"").toLowerCase().trim(), be=(b.email||"").toLowerCase().trim();
   if(ae && be && ae===be) return true;                 // same email = same person
