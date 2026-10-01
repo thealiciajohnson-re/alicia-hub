@@ -75,6 +75,23 @@ async function sset(k,v){
           }
         }
       } catch(e){ console.error("leads merge check threw — skipping save to protect server-added leads", e); if (k===SK.leads) return; toSave = v; }
+      try {
+        // market.social (Instagram/TikTok reach + followers) is written server-side by the weekly social sync.
+        // The app must never blind-overwrite it, or the dashboard reach numbers vanish. On save, read the DB
+        // market and deep-merge its .social under the outgoing one (server reach as base, any client edit on top).
+        if (k === SK.market && v && typeof v === "object") {
+          const resM = await supa.from("hub_state").select("value").eq("user_id",_session.user.id).eq("key",k).maybeSingle();
+          if (resM && resM.error) { console.error("market merge read failed — skipping save to protect social reach", resM.error); return; }
+          const dbm = resM && resM.data ? resM.data.value : null;
+          if (dbm && typeof dbm === "object" && dbm.social && typeof dbm.social === "object") {
+            const outS = (v.social && typeof v.social === "object") ? v.social : {};
+            const plats = {}; Object.keys(dbm.social).forEach(function(p){ plats[p]=1; }); Object.keys(outS).forEach(function(p){ plats[p]=1; });
+            const merged = {};
+            Object.keys(plats).forEach(function(p){ merged[p] = (p==="updated") ? (outS.updated||dbm.social.updated) : Object.assign({}, dbm.social[p]||{}, outS[p]||{}); });
+            toSave = Object.assign({}, v, { social: merged }); _cache[k] = toSave;
+          }
+        }
+      } catch(e){ console.error("market merge threw — skipping save to protect social reach", e); if (k===SK.market) return; }
       supa.from("hub_state").upsert(
         { user_id:_session.user.id, key:k, value:toSave, updated_at:new Date().toISOString() },
         { onConflict:"user_id,key" }
@@ -618,7 +635,10 @@ function App() {
       const seeded = await sget(SK.seeded);
       const [l,r,d,g,a,sc,tx,ohg,enr,ak,lst,mkt,dis,soc,cma] = await Promise.all([sget(SK.leads),sget(SK.rems),sget(SK.deals),sget(SK.goals),sget(SK.act),sget(SK.scores),sget(SK.txs),sget(SK.oh),sget(SK.enrolled),sget(SK.apikey),sget(SK.listings),sget(SK.market),sget(SK.dismissed),sget(SK.social),sget(SK.cmas)]);
       if (cma) setCmas(cma);
-      if (l) { setLeads(dedupeLeads(l)); } else if (!seeded) { setLeads(SEEDS); await sset(SK.leads,SEEDS); await sset(SK.seeded,true); }
+      // On load, only drop null/non-object entries (the "stuck on Loading" guard) — do NOT merge/collapse
+      // duplicates here. On-load merging silently deleted real leads (e.g. one owner with several farm homes).
+      // Deliberate de-duping still happens via the explicit "merge duplicates" tool, never automatically on load.
+      if (l) { setLeads((l||[]).filter(function(x){ return x && typeof x==="object" && !Array.isArray(x); })); } else if (!seeded) { setLeads(SEEDS); await sset(SK.leads,SEEDS); await sset(SK.seeded,true); }
       if (r) { setRems(r); } else { setRems(INIT_REMS); await sset(SK.rems,INIT_REMS); }
       if (d) { setDeals(d); } else { setDeals(INIT_DEALS); await sset(SK.deals,INIT_DEALS); }
       if (g) setGoals(g);
