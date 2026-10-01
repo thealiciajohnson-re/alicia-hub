@@ -3612,104 +3612,127 @@ const CB = {esp:"#2B211B", cream:"#F7F3EC", ink:"#3A2F28", gold:"#C9A24B", blue:
 function cbEsc(s){ return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function cbWrap(s,max){ var words=String(s||"").split(/\s+/), lines=[], cur=""; words.forEach(function(w){ if((cur+" "+w).trim().length>max){ if(cur)lines.push(cur); cur=w; } else cur=(cur?cur+" ":"")+w; }); if(cur)lines.push(cur); return lines; }
 function cbTspans(lines,x,y,lh){ return lines.map(function(ln,i){ return '<tspan x="'+x+'" y="'+(y+i*lh)+'">'+cbEsc(ln)+'</tspan>'; }).join(""); }
-// One slide → a self-contained 1080x1350 (4:5) SVG string. No external images/fonts so it rasterizes cleanly to PNG.
-function cbSlideSVG(sl,i,total){
-  var W=1080,H=1350, serif="Georgia,'Times New Roman',serif", sans="Arial,Helvetica,sans-serif";
-  var brand='ALICIA JOHNSON &#183; EXCELLERATE REAL ESTATE';
-  var head='<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'">';
-  if(sl.kind==="cover"){
-    var tl=cbWrap(sl.title,16);
-    var ty=H/2 - (tl.length-1)*62 - 30;
-    return head
-      +'<rect width="'+W+'" height="'+H+'" fill="'+CB.esp+'"/>'
-      +'<text x="'+W/2+'" y="150" fill="'+CB.gold+'" font-family="'+sans+'" font-size="26" font-weight="700" letter-spacing="5" text-anchor="middle">'+brand+'</text>'
-      +'<rect x="'+(W/2-40)+'" y="200" width="80" height="4" fill="'+CB.gold+'"/>'
-      +'<text fill="'+CB.white+'" font-family="'+serif+'" font-size="104" font-weight="700" text-anchor="middle">'+cbTspans(tl,W/2,ty,118)+'</text>'
-      +(sl.body?'<text x="'+W/2+'" y="'+(H-240)+'" fill="#d9cfbf" font-family="'+sans+'" font-size="34" text-anchor="middle">'+cbTspans(cbWrap(sl.body,30),W/2,H-240,46)+'</text>':'')
-      +'<text x="'+W/2+'" y="'+(H-120)+'" fill="'+CB.gold+'" font-family="'+sans+'" font-size="34" font-weight="700" text-anchor="middle">swipe &#8594;</text>'
-      +'</svg>';
-  }
-  if(sl.kind==="cta"){
-    var ctl=cbWrap(sl.title,18);
-    return head
-      +'<rect width="'+W+'" height="'+H+'" fill="'+CB.blue+'"/>'
-      +'<text x="'+W/2+'" y="150" fill="#bcd0ec" font-family="'+sans+'" font-size="26" font-weight="700" letter-spacing="5" text-anchor="middle">'+brand+'</text>'
-      +'<text fill="'+CB.white+'" font-family="'+serif+'" font-size="92" font-weight="700" text-anchor="middle">'+cbTspans(ctl,W/2,430,104)+'</text>'
-      +'<text fill="#e6eefb" font-family="'+sans+'" font-size="40" text-anchor="middle">'+cbTspans(cbWrap(sl.body,34),W/2,430+ctl.length*104+60,54)+'</text>'
-      +'<rect x="'+(W/2-330)+'" y="'+(H-360)+'" width="660" height="110" rx="18" fill="'+CB.white+'"/>'
-      +'<text x="'+W/2+'" y="'+(H-288)+'" fill="'+CB.blue+'" font-family="'+sans+'" font-size="40" font-weight="800" text-anchor="middle">'+cbEsc(sl.action||"DM me to start")+'</text>'
-      +'<text x="'+W/2+'" y="'+(H-120)+'" fill="#cfe0f7" font-family="'+sans+'" font-size="30" text-anchor="middle">707-849-6775 &#183; DRE #02272644</text>'
-      +'</svg>';
-  }
-  // content
-  var hl=cbWrap(sl.title,20), bl=cbWrap(sl.body,34);
-  return head
-    +'<rect width="'+W+'" height="'+H+'" fill="'+CB.cream+'"/>'
-    +'<rect width="'+W+'" height="12" fill="'+CB.blue+'"/>'
-    +'<text x="90" y="250" fill="'+CB.gold+'" font-family="'+serif+'" font-size="150" font-weight="700">'+(sl.num||("0"+i))+'</text>'
-    +'<text x="90" fill="'+CB.esp+'" font-family="'+serif+'" font-size="76" font-weight="700">'+cbTspans(hl,90,400,86)+'</text>'
-    +'<text x="90" fill="'+CB.ink+'" font-family="'+sans+'" font-size="42" >'+cbTspans(bl,90,400+hl.length*86+70,60)+'</text>'
-    +'<text x="90" y="'+(H-70)+'" fill="'+CB.mute+'" font-family="'+sans+'" font-size="28" font-weight="700" letter-spacing="2">ALICIA JOHNSON &#183; EXCELLERATE</text>'
-    +'<text x="'+(W-90)+'" y="'+(H-70)+'" fill="'+CB.mute+'" font-family="'+sans+'" font-size="28" text-anchor="end">'+i+' / '+total+'</text>'
-    +'</svg>';
+// One slide → a self-contained 1080x1350 (4:5) SVG. Nucci style: cinematic dark bg (your uploaded photo,
+// or a branded dark gradient), a bottom scrim, and a BOLD title overlaid. overlayOnly=true drops the bg
+// (used at export time, where the photo is painted to canvas first, then this overlay on top — avoids taint).
+function cbSlideSVG(sl,i,total,overlayOnly){
+  var W=1080,H=1350, sans="Arial,Helvetica,sans-serif";
+  var pal = sl.kind==="cta" ? ["#1a4280","#0b1d3a"] : sl.kind==="cover" ? ["#2b211b","#0e0a07"] : (i%2 ? ["#211a16","#0c0a08"] : ["#16243f","#0a1526"]);
+  var head='<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'">';
+  var defs='<defs>'
+    +'<linearGradient id="bg'+i+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+pal[0]+'"/><stop offset="1" stop-color="'+pal[1]+'"/></linearGradient>'
+    +'<linearGradient id="sc'+i+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000" stop-opacity="0"/><stop offset="0.5" stop-color="#000000" stop-opacity="0.3"/><stop offset="1" stop-color="#000000" stop-opacity="0.9"/></linearGradient>'
+    +'</defs>';
+  var bg = overlayOnly ? '' : (sl.img
+    ? '<image href="'+sl.img+'" xlink:href="'+sl.img+'" x="0" y="0" width="'+W+'" height="'+H+'" preserveAspectRatio="xMidYMid slice"/>'
+    : '<rect width="'+W+'" height="'+H+'" fill="url(#bg'+i+')"/>');
+  var scrim='<rect width="'+W+'" height="'+H+'" fill="url(#sc'+i+')"/>';
+  var eyebrow='<text x="72" y="100" fill="'+CB.gold+'" font-family="'+sans+'" font-size="27" font-weight="800" letter-spacing="4">'+cbEsc((sl.kicker||"ALICIA JOHNSON").toUpperCase())+'</text>'
+    +'<rect x="72" y="120" width="60" height="5" fill="'+CB.gold+'"/>';
+  var counter='<text x="72" y="'+(H-56)+'" fill="#ffffff" fill-opacity="0.72" font-family="'+sans+'" font-size="25" font-weight="700" letter-spacing="2">ALICIA JOHNSON &#183; EXCELLERATE</text>'
+    +'<text x="'+(W-72)+'" y="'+(H-56)+'" fill="#ffffff" fill-opacity="0.72" font-family="'+sans+'" font-size="27" text-anchor="end">'+i+' / '+total+'</text>';
+  var tsize = sl.kind==="content" ? 86 : 104, lh=tsize+12;
+  var tl=cbWrap(sl.title, sl.kind==="content"?17:14);
+  var bodyLines = sl.body ? cbWrap(sl.body,40) : [];
+  var pillH = (sl.kind==="cta" && sl.action) ? 150 : 0;
+  var blockBottom = H-150-pillH;
+  var bodyH = bodyLines.length ? (bodyLines.length*50 + 34) : 0;
+  var titleTopY = blockBottom - bodyH - (tl.length-1)*lh;
+  var title='<text fill="#ffffff" font-family="'+sans+'" font-size="'+tsize+'" font-weight="800">'+cbTspans(tl,72,titleTopY,lh)+'</text>';
+  var body = bodyLines.length ? '<text fill="#ffffff" fill-opacity="0.92" font-family="'+sans+'" font-size="37">'+cbTspans(bodyLines,72,titleTopY+(tl.length-1)*lh+70,50)+'</text>' : '';
+  var pill='';
+  if(sl.kind==="cta" && sl.action){ var pw=Math.min(840,90+String(sl.action).length*27), py=H-250;
+    pill='<rect x="72" y="'+py+'" width="'+pw+'" height="112" rx="16" fill="'+CB.gold+'"/>'
+      +'<text x="'+(72+pw/2)+'" y="'+(py+72)+'" fill="#1a1208" font-family="'+sans+'" font-size="42" font-weight="800" text-anchor="middle">'+cbEsc(sl.action)+'</text>'; }
+  return head+defs+bg+scrim+eyebrow+title+body+pill+counter+'</svg>';
 }
 const CB_PRESETS = [
-  {k:"seller_value", label:"5 ways to add value before selling", slides:[
-    {kind:"cover", title:"5 easy ways to add value before you sell", body:"Sonoma County sellers — save this"},
-    {kind:"content", title:"Fresh, neutral paint", body:"The highest-return update there is. Light, warm neutrals make every room feel bigger and newer."},
-    {kind:"content", title:"Deep clean & declutter", body:"Buyers need to picture their life here. Clear surfaces and spotless floors do more than you'd think."},
-    {kind:"content", title:"Curb appeal", body:"Fresh mulch, trimmed plants, a clean entry. Buyers decide in the first 10 seconds from the curb."},
-    {kind:"content", title:"Fix the small stuff", body:"Leaky faucet, sticky door, burnt-out bulbs. Little flaws make buyers wonder what else was ignored."},
-    {kind:"content", title:"Price it right from day one", body:"The first two weeks get the most eyes. The right number creates competition, not crickets."},
-    {kind:"cta", title:"Thinking of selling?", body:"I'll show you exactly where your home stands in today's market.", action:"DM me “VALUE”"}
+  {k:"seller_value", label:"5 ways to add value before selling",
+    caption:"Small moves, big return 💰 Save this before you list — which one surprised you? ⬇️\n\n#sonomacounty #santarosa #realestate #homeselling #sellertips #northbay",
+    slides:[
+    {kind:"cover", kicker:"Seller Playbook", title:"5 easy ways to add value before you sell", body:"Sonoma County sellers — save this"},
+    {kind:"content", kicker:"Tip 01", title:"Fresh, neutral paint", body:"The highest-return update there is. Light, warm neutrals make every room feel bigger and newer."},
+    {kind:"content", kicker:"Tip 02", title:"Deep clean & declutter", body:"Buyers need to picture their life here. Clear surfaces and spotless floors do more than you'd think."},
+    {kind:"content", kicker:"Tip 03", title:"Curb appeal", body:"Fresh mulch, trimmed plants, a clean entry. Buyers decide in the first 10 seconds from the curb."},
+    {kind:"content", kicker:"Tip 04", title:"Fix the small stuff", body:"Leaky faucet, sticky door, burnt-out bulbs. Small flaws make buyers wonder what else was ignored."},
+    {kind:"content", kicker:"Tip 05", title:"Price it right from day one", body:"The first two weeks get the most eyes. The right number creates competition, not crickets."},
+    {kind:"cta", kicker:"Let's talk", title:"Thinking of selling?", body:"I'll show you where your home stands in today's market.", action:"DM me “VALUE”"}
   ]},
-  {k:"quiz", label:"Home Value Quiz promo", slides:[
-    {kind:"cover", title:"What's your home really worth?", body:"Not a Zestimate. Real numbers."},
-    {kind:"content", title:"Online estimates miss", body:"Robo-estimates don't see your upgrades, your street, or what's actually selling next door."},
-    {kind:"content", title:"Real comparable sales", body:"I pull the real closed sales around your home and give you an honest range."},
-    {kind:"content", title:"Takes one minute", body:"Answer 8 quick questions. I'll personally follow up with your number."},
-    {kind:"cta", title:"Find your number", body:"Take my 1-minute Home Value Quiz.", action:"Link in bio → Quiz"}
+  {k:"quiz", label:"Home Value Quiz promo",
+    caption:"Curious what your home's really worth? I built a 1-minute quiz that uses real nearby sales — link in bio. 🏡\n\n#homevalue #sonomacounty #santarosarealestate #thinkingofselling #northbayhomes",
+    slides:[
+    {kind:"cover", kicker:"Home Value", title:"What's your home really worth?", body:"Not a Zestimate. Real numbers."},
+    {kind:"content", kicker:"Why", title:"Online estimates miss", body:"Robo-estimates don't see your upgrades, your street, or what's actually selling next door."},
+    {kind:"content", kicker:"How", title:"Real comparable sales", body:"I pull the real closed sales around your home and give you an honest range."},
+    {kind:"content", kicker:"Easy", title:"Takes one minute", body:"Answer 8 quick questions. I'll personally follow up with your number."},
+    {kind:"cta", kicker:"Your number", title:"Find your number", body:"Take my 1-minute Home Value Quiz.", action:"Link in bio → Quiz"}
   ]},
-  {k:"market", label:"Monthly market update", slides:[
-    {kind:"cover", title:"Santa Rosa market update", body:"What's happening right now"},
-    {kind:"content", title:"Median sold price", body:"Add this month's number from your MLS data."},
-    {kind:"content", title:"Days on market", body:"Add the current average — shows how fast homes move."},
-    {kind:"content", title:"What it means for you", body:"One honest sentence on whether it favors buyers or sellers."},
-    {kind:"cta", title:"Questions on your area?", body:"I track every neighborhood in the North Bay.", action:"DM me “MARKET”"}
+  {k:"market", label:"Monthly market update",
+    caption:"Your Sonoma County market snapshot 📊 Save it + DM me “MARKET” for your street's numbers.\n\n#sonomacountyrealestate #santarosa #marketupdate #realestate #northbay",
+    slides:[
+    {kind:"cover", kicker:"Market Update", title:"Santa Rosa market update", body:"What's happening right now"},
+    {kind:"content", kicker:"Price", title:"Median sold price", body:"Add this month's number from your MLS data."},
+    {kind:"content", kicker:"Speed", title:"Days on market", body:"Add the current average — shows how fast homes move."},
+    {kind:"content", kicker:"Takeaway", title:"What it means for you", body:"One honest sentence on whether it favors buyers or sellers."},
+    {kind:"cta", kicker:"Let's talk", title:"Questions on your area?", body:"I track every neighborhood in the North Bay.", action:"DM me “MARKET”"}
   ]}
 ];
 function CarouselBuilder(){
   var [pk,setPk] = useState(CB_PRESETS[0].k);
   var [slides,setSlides] = useState(CB_PRESETS[0].slides.map(function(s){ return Object.assign({},s); }));
+  var [caption,setCaption] = useState(CB_PRESETS[0].caption);
   var [busy,setBusy] = useState("");
-  function loadPreset(k){ var p=CB_PRESETS.find(function(x){ return x.k===k; }); setPk(k); setSlides(p.slides.map(function(s){ return Object.assign({},s); })); }
-  function edit(i,field,val){ setSlides(function(p){ return p.map(function(s,ix){ return ix===i?Object.assign({},s,(field==="title"?{title:val}:{body:val})):s; }); }); }
-  function pngFromSVG(svg,cb){ var img=new Image(); var blob=new Blob([svg],{type:"image/svg+xml;charset=utf-8"}); var url=URL.createObjectURL(blob);
-    img.onload=function(){ var c=document.createElement("canvas"); c.width=1080; c.height=1350; var x=c.getContext("2d"); x.drawImage(img,0,0,1080,1350); URL.revokeObjectURL(url); c.toBlob(function(b){ cb(b); },"image/png"); };
-    img.onerror=function(){ URL.revokeObjectURL(url); cb(null); }; img.src=url; }
-  function dlOne(i){ var sl=slides[i]; var svg=cbSlideSVG(sl,i+1,slides.length); pngFromSVG(svg,function(b){ if(!b){ setBusy("Couldn't render — try again."); return; } var a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download="carousel-slide-"+(i+1)+".png"; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(a.href); },1500); }); }
-  function dlAll(){ setBusy("Rendering slides…"); var n=0; (function next(){ if(n>=slides.length){ setBusy("✓ "+slides.length+" slides downloaded — open Instagram, make a new post, add them in order, post."); return; } dlOne(n); n++; setTimeout(next,700); })(); }
+  function loadPreset(k){ var p=CB_PRESETS.find(function(x){ return x.k===k; }); setPk(k); setSlides(p.slides.map(function(s){ return Object.assign({},s); })); setCaption(p.caption||""); }
+  function edit(i,obj){ setSlides(function(p){ return p.map(function(s,ix){ return ix===i?Object.assign({},s,obj):s; }); }); }
+  function pickPhoto(i,file){ if(!file){ edit(i,{img:null}); return; } var r=new FileReader(); r.onload=function(ev){ edit(i,{img:ev.target.result}); }; r.readAsDataURL(file); }
+  function drawCover(x,img){ var W=1080,H=1350,ir=img.width/img.height,cr=W/H,dw,dh; if(ir>cr){ dh=H; dw=H*ir; } else { dw=W; dh=W/ir; } x.drawImage(img,(W-dw)/2,(H-dh)/2,dw,dh); }
+  function svgImg(svg,cb){ var im=new Image(); var b=new Blob([svg],{type:"image/svg+xml;charset=utf-8"}); var u=URL.createObjectURL(b); im.onload=function(){ URL.revokeObjectURL(u); cb(im); }; im.onerror=function(){ URL.revokeObjectURL(u); cb(null); }; im.src=u; }
+  function slideBlob(sl,i,total,cb){
+    var W=1080,H=1350, c=document.createElement("canvas"); c.width=W; c.height=H; var x=c.getContext("2d");
+    function overlay(){ svgImg(cbSlideSVG(sl,i,total,true), function(o){ if(!o){ cb(null); return; } x.drawImage(o,0,0,W,H); c.toBlob(function(b){ cb(b); },"image/png"); }); }
+    if(sl.img){ var ph=new Image(); ph.onload=function(){ drawCover(x,ph); overlay(); }; ph.onerror=function(){ x.fillStyle="#14110e"; x.fillRect(0,0,W,H); overlay(); }; ph.src=sl.img; }
+    else { svgImg(cbSlideSVG(sl,i,total,false), function(g){ if(!g){ cb(null); return; } x.drawImage(g,0,0,W,H); c.toBlob(function(b){ cb(b); },"image/png"); }); }
+  }
+  function dlBlob(b,name){ if(!b)return; var a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(a.href); },1500); }
+  function dlAll(){ setBusy("Rendering slides…"); var n=0; (function next(){ if(n>=slides.length){ setBusy("✓ "+slides.length+" slides saved to your Downloads — open Instagram → new post → add them in order → paste the caption → post."); return; } (function(ix){ slideBlob(slides[ix],ix+1,slides.length,function(b){ dlBlob(b,"carousel-slide-"+(ix+1)+".png"); }); })(n); n++; setTimeout(next,750); })(); }
+  var darkBox={background:"#14141a",borderRadius:12,padding:"14px 12px",marginBottom:12};
   return (
     <Card title="🎠 Carousel Builder — swipeable Instagram posts">
-      <div style={{fontSize:12.5,color:C.t3,marginBottom:10,lineHeight:1.5}}>Pick a topic, tweak the words, download the slides as images, then post them as one Instagram carousel (and TikTok photo post). Branded for you automatically — your colors, name, DRE.</div>
+      <div style={{fontSize:12.5,color:C.t3,marginBottom:10,lineHeight:1.5}}>Pick a topic, tweak the words, drop a photo on any slide for the cinematic look, then <b>download all slides</b> and post them as one Instagram carousel. Captions + hashtags are written for you.</div>
       <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:12}}>
         {CB_PRESETS.map(function(p){ var on=p.k===pk; return <button key={p.k} onClick={function(){ loadPreset(p.k); }} style={{padding:"7px 11px",borderRadius:8,fontSize:12,cursor:"pointer",fontWeight:on?700:500,border:"1px solid "+(on?C.ac:C.brm),background:on?C.aL:C.sur,color:on?C.ac:C.t2}}>{p.label}</button>; })}
       </div>
-      <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:10,marginBottom:12}}>
-        {slides.map(function(sl,i){ var svg=cbSlideSVG(sl,i+1,slides.length); var uri="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);
-          return <div key={i} style={{flex:"0 0 auto",width:168}}><img src={uri} alt={"Slide "+(i+1)} style={{width:168,height:210,borderRadius:10,border:"1px solid "+C.br,display:"block"}} /><div style={{fontSize:10,color:C.t3,textAlign:"center",marginTop:3}}>Slide {i+1}{sl.kind==="cover"?" · cover":sl.kind==="cta"?" · CTA":""}</div></div>;
-        })}
+      <div style={darkBox}>
+        <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:4}}>
+          {slides.map(function(sl,i){ var uri="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(cbSlideSVG(sl,i+1,slides.length,false));
+            return <div key={i} style={{flex:"0 0 auto",width:176}}>
+              <img src={uri} alt={"Slide "+(i+1)} style={{width:176,height:220,borderRadius:10,display:"block",objectFit:"cover",background:"#000"}} />
+              <div style={{fontSize:10,color:"#8a8a95",textAlign:"center",marginTop:4}}>Slide {i+1}{sl.kind==="cover"?" · cover":sl.kind==="cta"?" · CTA":""}</div>
+            </div>;
+          })}
+        </div>
       </div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12,alignItems:"center"}}>
         <Btn v="primary" onClick={dlAll}>⬇ Download all {slides.length} slides</Btn>
+        <Btn onClick={function(){ if(navigator.clipboard){ navigator.clipboard.writeText(caption).then(function(){ setBusy("Caption copied ✓ — paste it when you post."); }); } }}>📋 Copy caption</Btn>
       </div>
       {busy && <div style={{fontSize:12,color:C.ac,marginBottom:12,lineHeight:1.5}}>{busy}</div>}
-      <div style={{fontSize:11,fontWeight:700,color:C.t3,textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Edit the words</div>
+
+      <div style={{fontSize:11,fontWeight:700,color:C.t3,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>Caption (with hashtags)</div>
+      <textarea value={caption} onChange={function(e){ setCaption(e.target.value); }} style={{...inp,minHeight:90,resize:"vertical",fontFamily:"inherit",marginBottom:14}} />
+
+      <div style={{fontSize:11,fontWeight:700,color:C.t3,textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Edit each slide</div>
       {slides.map(function(sl,i){ return (
         <div key={i} style={{background:C.s2,border:"1px solid "+C.br,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
           <div style={{fontSize:11,color:C.t3,marginBottom:4}}>Slide {i+1}{sl.kind==="cover"?" (cover)":sl.kind==="cta"?" (call-to-action)":""}</div>
-          <input value={sl.title} onChange={function(e){ edit(i,"title",e.target.value); }} style={{...inp,marginBottom:6,fontWeight:600}} />
-          <textarea value={sl.body} onChange={function(e){ edit(i,"body",e.target.value); }} style={{...inp,minHeight:52,resize:"vertical",fontFamily:"inherit"}} />
+          <input value={sl.title} onChange={function(e){ edit(i,{title:e.target.value}); }} style={{...inp,marginBottom:6,fontWeight:600}} placeholder="Headline" />
+          <textarea value={sl.body||""} onChange={function(e){ edit(i,{body:e.target.value}); }} style={{...inp,minHeight:48,resize:"vertical",fontFamily:"inherit",marginBottom:6}} placeholder="Supporting line" />
+          {sl.kind==="cta" && <input value={sl.action||""} onChange={function(e){ edit(i,{action:e.target.value}); }} style={{...inp,marginBottom:6}} placeholder="Button text (e.g. DM me VALUE)" />}
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <label style={{fontSize:11.5,color:C.ac,fontWeight:600,cursor:"pointer",border:"1px solid "+C.aB,background:C.aL,borderRadius:7,padding:"5px 10px"}}>{sl.img?"🖼 Change photo":"📷 Add photo"}<input type="file" accept="image/*" onChange={function(e){ pickPhoto(i,e.target.files&&e.target.files[0]); e.target.value=""; }} style={{display:"none"}} /></label>
+            {sl.img && <button onClick={function(){ pickPhoto(i,null); }} style={{fontSize:11.5,color:C.ro,background:"none",border:"none",cursor:"pointer"}}>Remove photo</button>}
+            {!sl.img && <span style={{fontSize:11,color:C.t3}}>No photo = branded dark background</span>}
+          </div>
         </div>
       ); })}
     </Card>
