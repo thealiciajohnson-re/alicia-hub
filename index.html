@@ -1378,7 +1378,7 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
 
 /* ── LEAD / PIPELINE CALCULATOR ──────────────────────────────── */
 function PanelLeadCalc(){
-  const [v,setV]=useState({budget:1000,cpl:16.61,answer:65,meeting:30,close:30,value:500000,comm:2.5});
+  const [v,setV]=useState({budget:260,cpl:16.61,answer:65,meeting:30,close:30,value:675000,comm:2.5});
   function up(k){ return function(e){ var n=parseFloat(e.target.value); setV(function(p){ var o=Object.assign({},p); o[k]=isNaN(n)?"":n; return o; }); }; }
   var budget=+v.budget||0, cpl=+v.cpl||0, answer=+v.answer||0, meeting=+v.meeting||0, close=+v.close||0, value=+v.value||0, comm=+v.comm||0;
   var leads = cpl>0 ? budget/cpl : 0;
@@ -1417,6 +1417,9 @@ function PanelLeadCalc(){
           </div>
           <div style={{marginTop:12,padding:"10px 12px",background:C.skL,border:"1px solid "+C.skB,borderRadius:8,fontSize:12,color:C.t2,lineHeight:1.5}}>
             <b style={{color:C.sk}}>Published benchmark:</b> real-estate Facebook leads averaged <b>$16.61/lead</b> across 1,000+ campaigns (WordStream/LocaliQ, 2025). Your own cost may run higher on a quiz funnel — adjust to taste.
+          </div>
+          <div style={{marginTop:8,padding:"10px 12px",background:C.gL,border:"1px solid "+C.gB,borderRadius:8,fontSize:12,color:C.t2,lineHeight:1.5}}>
+            <b style={{color:C.go}}>Pre-filled from your QuickBooks:</b> the budget starts at your recent average monthly ad spend, and property value at your last closed sale. Everything's editable — slide the budget up to see what spending more could produce.
           </div>
         </Card>
         <Card title="What that becomes each month" style={{flex:"1 1 340px"}}>
