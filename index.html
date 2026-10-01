@@ -755,7 +755,7 @@ function App() {
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"cma",l:"🏷️ CMA / Comps"},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
-    {s:"Business",items:[{id:"roadmap",l:"📋 Roadmap"},{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"}]}
+    {s:"Business",items:[{id:"roadmap",l:"📋 Roadmap"},{id:"calc",l:"🧮 Lead Calculator"},{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"}]}
   ];
 
   const pp = {leads,rems,deals,act,goals,scores,txs,oh,enrolled,listings,setListings,market,setMarket,social,setSocial,cmas,setCmas,setTab,setLeads,setRems,setDeals,setGoals,setAct,setScores,setTxs,setOh,setEnrolled,addLead,focusLead,setFocusLead,pullFromFub,dismissLead};
@@ -815,6 +815,7 @@ function App() {
           {tab==="circle"    && <PanelCircle leads={leads} setLeads={setLeads} />}
           {tab==="cma"       && <PanelCMA {...pp} />}
           {tab==="roadmap"   && <PanelRoadmap {...pp} />}
+          {tab==="calc"      && <PanelLeadCalc />}
           {tab==="actionplans" && <PanelActionPlans {...pp} />}
           {tab==="nurture"   && <PanelNurture {...pp} />}
           {tab==="listings"  && <PanelListings {...pp} />}
@@ -1371,6 +1372,68 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
       </Card>
       <div style={{borderTop:"1px solid "+C.br,margin:"22px 0 16px"}} />
       <PanelMojo leads={leads} setLeads={setLeads} />
+    </div>
+  );
+}
+
+/* ── LEAD / PIPELINE CALCULATOR ──────────────────────────────── */
+function PanelLeadCalc(){
+  const [v,setV]=useState({budget:1000,cpl:16.61,answer:65,meeting:30,close:30,value:500000,comm:2.5});
+  function up(k){ return function(e){ var n=parseFloat(e.target.value); setV(function(p){ var o=Object.assign({},p); o[k]=isNaN(n)?"":n; return o; }); }; }
+  var budget=+v.budget||0, cpl=+v.cpl||0, answer=+v.answer||0, meeting=+v.meeting||0, close=+v.close||0, value=+v.value||0, comm=+v.comm||0;
+  var leads = cpl>0 ? budget/cpl : 0;
+  var answered = leads*(answer/100);
+  var meetings = answered*(meeting/100);
+  var closings = meetings*(close/100);
+  var tv = closings*value;
+  var gci = tv*(comm/100);
+  var overall = leads>0 ? (closings/leads*100) : 0;
+  function money(n){ return "$"+Math.round(n).toLocaleString(); }
+  function n2(n){ return (Math.round(n*100)/100).toLocaleString(); }
+  var stat=function(label,val,sub,accent){ return (
+    <div style={{flex:"1 1 150px",minWidth:150,background:C.sur,border:"1px solid "+C.br,borderRadius:10,padding:"12px 14px"}}>
+      <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:".06em",color:C.t3,marginBottom:4}}>{label}</div>
+      <div style={{fontSize:22,fontWeight:800,color:accent||C.tx,lineHeight:1.1}}>{val}</div>
+      {sub?<div style={{fontSize:10.5,color:C.t3,marginTop:3}}>{sub}</div>:null}
+    </div>
+  ); };
+  var field=function(label,k,prefix,suffix){ return (
+    <Fld label={label}><div style={{display:"flex",alignItems:"center",gap:6}}>{prefix?<span style={{color:C.t3,fontSize:13}}>{prefix}</span>:null}<input style={inp} type="number" value={v[k]} onChange={up(k)} />{suffix?<span style={{color:C.t3,fontSize:13}}>{suffix}</span>:null}</div></Fld>
+  ); };
+  return (
+    <div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>🧮 Lead &amp; Pipeline Calculator</div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:720}}>Plug in a monthly ad budget and your conversion assumptions to see what it should turn into — leads, conversations, meetings, listings, and commission. Start with the published cost-per-lead benchmark, then adjust the rates to match your real numbers.</div>
+      <div style={{display:"flex",gap:16,flexWrap:"wrap",alignItems:"flex-start"}}>
+        <Card title="Your monthly scenario" style={{flex:"1 1 320px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            {field("Monthly ad budget","budget","$")}
+            {field("Cost per lead","cpl","$")}
+            {field("Answer rate","answer",null,"%")}
+            {field("Meeting rate (of answers)","meeting",null,"%")}
+            {field("Close rate (of meetings)","close",null,"%")}
+            {field("Avg property value","value","$")}
+            {field("Commission","comm",null,"%")}
+          </div>
+          <div style={{marginTop:12,padding:"10px 12px",background:C.skL,border:"1px solid "+C.skB,borderRadius:8,fontSize:12,color:C.t2,lineHeight:1.5}}>
+            <b style={{color:C.sk}}>Published benchmark:</b> real-estate Facebook leads averaged <b>$16.61/lead</b> across 1,000+ campaigns (WordStream/LocaliQ, 2025). Your own cost may run higher on a quiz funnel — adjust to taste.
+          </div>
+        </Card>
+        <Card title="What that becomes each month" style={{flex:"1 1 340px"}}>
+          <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
+            {stat("New leads",n2(leads),"budget ÷ cost per lead")}
+            {stat("Answered convos",n2(answered),answer+"% of leads")}
+            {stat("Meetings",n2(meetings),meeting+"% of answered")}
+            {stat("Listings won",n2(closings),close+"% of meetings",C.sk)}
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:10,marginTop:10}}>
+            {stat("Transaction value",money(tv),"listings × avg value")}
+            {stat("Gross commission",money(gci),comm+"% of value",C.go)}
+            {stat("Lead → listing",n2(overall)+"%","overall conversion")}
+          </div>
+          <div style={{fontSize:11,color:C.t3,marginTop:12,lineHeight:1.5}}>Projections from your assumptions, not a guarantee. Example: ~1.5 listings/month is roughly 3 every two months. Dial the rates to your real pipeline to pressure-test any ad spend before you commit a dollar.</div>
+        </Card>
+      </div>
     </div>
   );
 }
