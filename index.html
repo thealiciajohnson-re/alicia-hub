@@ -1276,6 +1276,9 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   // Auto-captured MLS expireds (carry an mlNum) start in their own "new — cold call" inbox.
   // Once you tap ✓ Contacted they move into your regular watched-Expired list, alongside ones you added by hand.
   // soldOff = a watchlist property that SOLD (per the daily accuracy check) — kept as a record but hidden from cold-call lists.
+  var [q,setQ]=useState("");
+  var _qq=(q||"").trim().toLowerCase();
+  function _mq(l){ return !_qq || ((l.addr||"")+" "+(l.watchAddr||"")+" "+(l.first||"")+" "+(l.last||"")).toLowerCase().indexOf(_qq)>=0; }
   var expiredNew = (leads||[]).filter(function(l){ return l.prospect==="expired" && l.mlNum && !l.contacted && !l.soldOff; });
   var expired = (leads||[]).filter(function(l){ return l.prospect==="expired" && !(l.mlNum && !l.contacted) && !l.soldOff; });
   // Auto-captured foreclosures (from PropertyRadar/Auction, marked with listName) start in the cold-call inbox.
@@ -1288,6 +1291,8 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   // solicit while active — watch for it to expire again (=prospect) or sell (=drops off, marked sold by the daily check).
   var watching = (leads||[]).filter(function(l){ return l.watch===true && l.watchStatus!=="sold"; })
     .sort(function(a,b){ return (b.watchDom||0)-(a.watchDom||0); });
+  if(_qq){ expiredNew=expiredNew.filter(_mq); expired=expired.filter(_mq); foreNew=foreNew.filter(_mq); foreWork=foreWork.filter(_mq); fsbo=fsbo.filter(_mq); lost=lost.filter(_mq); watching=watching.filter(_mq); }
+  var _hits=expiredNew.length+expired.length+foreNew.length+foreWork.length+fsbo.length+lost.length+watching.length;
   function open(l){ if(setFocusLead) setFocusLead(l.id); setTab("leads"); }
   function toNurture(l){ if(setLeads) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,prospect:"",nurture:"monthly",temp:"warm",log:[...(x.log||[]),toDay()+" — Converted from Expired to nurture"]}:x; }); }); }
   function wonBack(l){ if(setLeads) setLeads(function(p){ return p.map(function(x){ return x.id===l.id?{...x,prospect:"",contacted:true,temp:"warm",nurture:x.nurture||"active",log:[...(x.log||[]),toDay()+" — Won back from Lost → returned to Leads"]}:x; }); }); }
@@ -1330,6 +1335,8 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>🎯 Expired / Foreclosure / FSBO / Lost Watchlist</div>
       <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:680}}>Homeowners worth prospecting. Add anyone from their lead card: <b>🎯 Expired</b> (didn't sell), <b>🎯 FSBO</b> (for sale by owner), or <b>🚫 Lost</b> (signed with another agent — watch for their listing to expire, then swoop back in). <b>Expired leads stay here only</b> — they never mix into your All Leads tab.</div>
+      <input value={q} onChange={function(e){ setQ(e.target.value); }} placeholder="🔍 Find an address or name in your watchlist…" style={{...inp,marginBottom:_qq?6:14}} />
+      {_qq && <div style={{fontSize:11,color:C.t3,marginBottom:14}}>Showing {_hits} match{_hits===1?"":"es"} for “{q}”. <span style={{color:C.ac,cursor:"pointer"}} onClick={function(){ setQ(""); }}>clear</span></div>}
       {watching.length>0 && <Card title={"👁 Watching — Active Listings (" + watching.length + ")"}>
         <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Listings you're monitoring — usually an expired that <b>relisted with another agent</b>. You can't solicit the listing while it's active, so watch for it to <b>expire again</b> (your moment) or <b>sell</b> (drops off automatically). The daily accuracy check updates these each morning.</div>
         {watching.map(function(l){
@@ -1545,6 +1552,9 @@ function PanelCircle({leads,setLeads}) {
   var [listed,setListed] = useState("");
   var [prev,setPrev] = useState(null);
   var [msg,setMsg] = useState("");
+  var [q,setQ]=useState("");
+  var _qq=(q||"").trim().toLowerCase();
+  function _mq(l){ return !_qq || ((l.addr||"")+" "+(l.first||"")+" "+(l.last||"")).toLowerCase().indexOf(_qq)>=0; }
 
   var EXCL={"2046 northfield dr":1,"2085 northfield dr":1};   // the listing itself + Alicia's own home — never email/mail
   function zipFrom(a){ var m=String(a||"").match(/\b(\d{5})\b/); return m?m[1]:""; }
@@ -1654,13 +1664,16 @@ function PanelCircle({leads,setLeads}) {
 
       {farmNames.length===0 && <Card title="No farms yet"><div style={{color:C.t3,fontSize:13}}>Add a farm above to get started.</div></Card>}
 
+      {farmNames.length>0 && <input value={q} onChange={function(e){ setQ(e.target.value); }} placeholder="🔍 Find an address or name across your farms…" style={{...inp,marginBottom:14}} />}
       {farmNames.map(function(fn){
-        var list=farms[fn];
-        var recips=uniqEmailLeads(list.filter(function(l){ return !l.circleExclude; }));
-        var noEmail=list.filter(function(l){ return !(l.email||l.email2); }).length;
+        var fullList=farms[fn];
+        var list=_qq?fullList.filter(_mq):fullList;
+        if(_qq && !list.length) return null;
+        var recips=uniqEmailLeads(fullList.filter(function(l){ return !l.circleExclude; }));
+        var noEmail=fullList.filter(function(l){ return !(l.email||l.email2); }).length;
         return (
           <div key={fn} style={{marginBottom:20}}>
-            <div style={{fontSize:15,fontWeight:700,marginTop:10,marginBottom:4}}>🏡 {fn} <span style={{fontSize:12,fontWeight:400,color:C.t3}}>· {list.length} neighbors{recips.length?" · "+recips.length+" emailable":""}{noEmail?" · "+noEmail+" mail-only":""}</span></div>
+            <div style={{fontSize:15,fontWeight:700,marginTop:10,marginBottom:4}}>🏡 {fn} <span style={{fontSize:12,fontWeight:400,color:C.t3}}>· {_qq?(list.length+" of "+fullList.length+" matching"):(fullList.length+" neighbors"+(recips.length?" · "+recips.length+" emailable":"")+(noEmail?" · "+noEmail+" mail-only":""))}</span></div>
             <GroupEmailCard
               title={"📧 Email this Farm ("+recips.length+" with email)"}
               blurb={<span>Send a “what’s your home worth?” note to every neighbor in this farm that has an email — personalized, via <b>Brevo</b>, with an unsubscribe + your mailing address (CAN-SPAM). It never says whose listing it is. Your own home and the listing itself are excluded automatically.</span>}
@@ -1669,8 +1682,8 @@ function PanelCircle({leads,setLeads}) {
               tag={"circle-blast"} blastField={"circleBlast"} setLeads={setLeads} />
             <Card title={"📋 Neighbors ("+list.length+")"}>
               <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:10}}>
-                <Btn onClick={function(){ callCSV(list,"circle-"+slug(fn)+"-call-list.csv"); }}>⬇ Call list (Mojo CSV)</Btn>
-                <Btn onClick={function(){ mailCSV(list,"circle-"+slug(fn)+"-mailing.csv"); }}>⬇ Mailing list (postcards)</Btn>
+                <Btn onClick={function(){ callCSV(fullList,"circle-"+slug(fn)+"-call-list.csv"); }}>⬇ Call list (Mojo CSV)</Btn>
+                <Btn onClick={function(){ mailCSV(fullList,"circle-"+slug(fn)+"-mailing.csv"); }}>⬇ Mailing list (postcards)</Btn>
               </div>
               <div style={{overflowX:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse",minWidth:520,fontSize:12}}>
@@ -1690,6 +1703,7 @@ function PanelCircle({leads,setLeads}) {
           </div>
         );
       })}
+      {_qq && !farmNames.some(function(fn){ return farms[fn].some(_mq); }) && <Card title="No matches"><div style={{color:C.t3,fontSize:13}}>No neighbor matches “{q}”. <span style={{color:C.ac,cursor:"pointer"}} onClick={function(){ setQ(""); }}>Clear search</span></div></Card>}
     </div>
   );
 }
