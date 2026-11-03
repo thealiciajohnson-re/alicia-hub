@@ -2271,6 +2271,16 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
     setSendMsg(nv ? ((nv==="lost"?"🚫 Marked Lost — set their listing expiration below to monitor.":("🏚️ Added to your "+_plbl[nv]+" watchlist."))+" See it under the Watchlist tab.") : "Removed from the watchlist.");
   }
 
+  // 👁 Watch an ACTIVE listing — keeps the lead in All Leads AND surfaces it under Watchlist ▸ Watching,
+  // where the daily check flips it to 🎯 Expired (your opening) or drops it off when it SELLS.
+  function setWatch(){
+    var on = !(modal.watch===true);
+    function upd(l){ return {...l, watch:on, watchStatus: on ? (l.watchStatus||"active") : l.watchStatus, watchAddr: on ? (l.watchAddr||l.addr||"") : l.watchAddr}; }
+    setLeads(function(p){ return p.map(function(l){ return l.id===modal.id ? upd(l) : l; }); });
+    setModal(function(m){ return upd(m); });
+    setSendMsg(on ? "👁 Watching this active listing — I'll track it until it sells or expires. See it under Watchlist ▸ Watching." : "Removed from your Watching list.");
+  }
+
   function setFollowAlert(){
     if(!fuDraft || !modal) return;
     var base = "Follow up — "+modal.first+" "+modal.last;
@@ -2729,6 +2739,7 @@ function PanelLeads({leads,setLeads,setTab,enrolled,setEnrolled,focusLead,setFoc
               <Btn v={modal.prospect==="fsbo"?"gold":"def"} onClick={function(){ setProspect("fsbo"); }} title="Add to your FSBO watchlist">🎯 FSBO{modal.prospect==="fsbo"?" ✓":""}</Btn>
               <Btn v={modal.prospect==="foreclosure"?"gold":"def"} onClick={function(){ setProspect("foreclosure"); }} title="Add to your Foreclosure watchlist to watch">🏚️ Foreclosure{modal.prospect==="foreclosure"?" ✓":""}</Btn>
               <Btn v={modal.prospect==="lost"?"rose":"def"} onClick={function(){ setProspect("lost"); }} title="Seller signed with another agent — monitor for their listing to expire">🚫 Lost{modal.prospect==="lost"?" ✓":""}</Btn>
+              <Btn v={modal.watch===true?"gold":"def"} onClick={function(){ setWatch(); }} title="Watch this active listing — stays in All Leads AND tracked under Watching until it sells or expires">👁 Watch Listing{modal.watch===true?" ✓":""}</Btn>
               <Btn v="sky" onClick={function(){ syncOneBrevo(modal); }}>{modal.brevoSynced?"✓ In Brevo":"📨 Add to Brevo"}</Btn>
               {confirmDelete
                 ? <span style={{display:"inline-flex",alignItems:"center",gap:5}}>
