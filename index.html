@@ -771,10 +771,10 @@ function App() {
 
   const NAV = [
     {s:"Daily",items:[{id:"dashboard",l:"Dashboard"},{id:"calendar",l:"Today"},{id:"rems",l:"Reminders",b:pendRem}]},
-    {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.filter(function(l){ return !hideFromLeads(l); }).length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired/FSBO/Lost",b:watchN},{id:"circle",l:"Circle Prospecting",b:circleN}]},
+    {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.filter(function(l){ return !hideFromLeads(l); }).length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired/FSBO/Lost",b:watchN},{id:"circle",l:"Circle Prospecting",b:circleN},{id:"dialer",l:"☎️ Call Session"}]},
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
-    {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"cma",l:"🏷️ CMA / Comps"},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
+    {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"listbuild",l:"🏗️ Listing Builder"},{id:"cma",l:"🏷️ CMA / Comps"},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
     {s:"Business",items:[{id:"roadmap",l:"📋 Roadmap"},{id:"calc",l:"💰 Budget"},{id:"rates",l:"Rates"},{id:"market",l:"Market Data"},{id:"goals",l:"Weekly Goals"}]}
   ];
 
@@ -839,6 +839,8 @@ function App() {
           {tab==="actionplans" && <PanelActionPlans {...pp} />}
           {tab==="nurture"   && <PanelNurture {...pp} />}
           {tab==="listings"  && <PanelListings {...pp} />}
+          {tab==="listbuild" && <PanelListingBuilder {...pp} />}
+          {tab==="dialer"    && <PanelCallSession {...pp} />}
           {tab==="campaigns" && <PanelCampaigns />}
           {tab==="social"    && <PanelSocial {...pp} />}
           {tab==="mktgemail" && <PanelMktgEmail {...pp} />}
@@ -3365,6 +3367,159 @@ function PanelActionPlans({leads,enrolled,setEnrolled}) {
 }
 
 /* ── MY LISTINGS ─────────────────────────────────────────────── */
+/* ── CALL SESSION — free built-in dialer: tap-to-call through your phone + one-tap CRM logging ── */
+function PanelCallSession({leads,setLeads,setRems,setTab,setFocusLead}) {
+  var [mode,setMode] = useState("block");
+  var [handled,setHandled] = useState({});
+  var [done,setDone] = useState(0);
+  var [note,setNote] = useState("");
+  var [tipTxt,setTipTxt] = useState("");
+  var [tipL,setTipL] = useState(false);
+  function ph(l){ return String(l.phone||l.phone2||"").trim(); }
+  var MODES = [
+    {id:"block", l:"📞 Call Block — never contacted", f:function(l){ return ph(l) && !l.contacted && l.prospect!=="lost"; }},
+    {id:"followup", l:"🔁 Follow-ups — warm/hot", f:function(l){ return ph(l) && l.contacted && (l.temp==="warm"||l.temp==="hot") && !l.prospect; }},
+    {id:"cold", l:"🏚️ Cold list — expired/foreclosure/FSBO", f:function(l){ return ph(l) && (l.prospect==="expired"||l.prospect==="foreclosure"||l.prospect==="fsbo"); }}
+  ];
+  var mf = (MODES.filter(function(m){ return m.id===mode; })[0]||MODES[0]).f;
+  var queue = (leads||[]).filter(function(l){ return l && mf(l) && !handled[l.id]; }).sort(function(a,b){ return (a.lc||"")<(b.lc||"")?-1:1; });
+  var cur = queue[0];
+  var totalMode = (leads||[]).filter(function(l){ return l && mf(l); }).length;
+  function telHref(l){ return "tel:"+ph(l).replace(/[^0-9+]/g,""); }
+  function fin(id){ setHandled(function(h){ var n=Object.assign({},h); n[id]=1; return n; }); setNote(""); setTipTxt(""); }
+  function logIt(label, extra){
+    if(!cur) return; var id=cur.id, nm=((cur.first||"")+" "+(cur.last||"")).trim();
+    setLeads(function(p){ return p.map(function(x){ return x.id===id ? Object.assign({},x,{contacted:true,lc:toDay(),log:(x.log||[]).concat(toDay()+" — ☎️ "+label+(note.trim()?": "+note.trim():""))}, extra||{}) : x; }); });
+    if(label==="Appointment set" && setRems){ setRems(function(p){ return (p||[]).concat([{id:uid(),title:"📅 Appt — "+nm,note:note.trim(),date:toDay(),time:"17:30",type:"appt",repeat:"none",done:false,leadId:id}]); }); }
+    setDone(function(d){ return d+1; }); fin(id);
+  }
+  function skip(){ if(cur) fin(cur.id); }
+  function changeMode(m){ setMode(m); setHandled({}); setDone(0); setNote(""); setTipTxt(""); }
+  function getTip(){ if(!cur) return; setTipL(true); setTipTxt(""); callAI("I'm "+AGENT.name+", a Sonoma County real estate agent, about to call "+(cur.first||"there")+" "+(cur.last||"")+" — a "+(cur.temp||"")+" "+(cur.type||"seller")+" lead"+(cur.prospect?(" ["+cur.prospect+"]"):"")+" at "+(cur.addr||"their area in Sonoma County")+". Source: "+(cur.source||"n/a")+". Notes: "+(cur.notes||"none")+". In 2 short sentences, give me exactly what to SAY when they pick up — confident, warm, Anthony-Nucci style, leading to a reason for the call and one question. Words only, no preamble.").then(function(t){ setTipTxt(t); setTipL(false); }).catch(function(){ setTipL(false); }); }
+  return (
+    <div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>☎️ Call Session</div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:12,lineHeight:1.5,maxWidth:680}}>Your call block, one lead at a time — tap to call through your phone, then tap how it went and it logs straight to the CRM and moves you to the next. {done>0?("You've logged "+done+" call"+(done===1?"":"s")+" this session. 🔥"):""}</div>
+      <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:14}}>
+        {MODES.map(function(m){ return <Btn key={m.id} v={mode===m.id?"primary":"def"} onClick={function(){ changeMode(m.id); }}>{m.l}</Btn>; })}
+      </div>
+      {!cur ? (
+        <Card title="🎉 Queue clear">
+          <div style={{color:C.t3,fontSize:13.5,lineHeight:1.6}}>{totalMode===0 ? "No one in this list has a phone number yet — add phones on their lead cards, or switch lists above." : ("You've worked through every lead with a phone in this list. "+(done>0?done+" logged — nice work.":"Switch lists above for more."))}</div>
+        </Card>
+      ) : (
+        <Card title={"Up now  ·  "+queue.length+" left in this list"}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:220}}>
+              <div style={{fontSize:20,fontWeight:700}}>{((cur.first||"")+" "+(cur.last||"")).trim()||"(no name)"} <Tag t={cur.temp==="hot"?"hot":cur.temp==="warm"?"warm":"new"}>{cur.temp||"new"}</Tag></div>
+              <div style={{fontSize:13,color:C.t2,marginTop:3}}>{cur.addr||"—"}</div>
+              <div style={{fontSize:12,color:C.t3,marginTop:2}}>{(cur.type||"seller")}{cur.prospect?" · "+cur.prospect:""}{cur.source?" · "+cur.source:""}{cur.lc?" · last contact "+fmtDate(cur.lc):" · never contacted"}</div>
+              {cur.notes ? <div style={{fontSize:12.5,color:C.t2,marginTop:8,background:C.s2,borderRadius:8,padding:"8px 10px",lineHeight:1.5,whiteSpace:"pre-wrap",maxHeight:120,overflow:"auto"}}>{cur.notes}</div> : null}
+              <div style={{marginTop:8}}><span style={{fontSize:11,color:C.ac,cursor:"pointer"}} onClick={function(){ if(setFocusLead){ setFocusLead(cur.id); } setTab("leads"); }}>Open full lead card →</span></div>
+            </div>
+            <div style={{textAlign:"center"}}>
+              <a href={telHref(cur)} style={{textDecoration:"none"}}><div style={{background:C.ac,color:"#fff",borderRadius:12,padding:"14px 22px",fontSize:17,fontWeight:700,whiteSpace:"nowrap"}}>📞 Call {ph(cur)}</div></a>
+              <div style={{fontSize:11,color:C.t3,marginTop:6,maxWidth:180}}>Opens your phone to dial. Then log how it went below.</div>
+            </div>
+          </div>
+          <div style={{marginTop:14,borderTop:"1px solid "+C.br,paddingTop:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><div style={{fontSize:12,fontWeight:600,color:C.t2}}>What to say</div><Btn v="gold" style={{fontSize:10,padding:"3px 8px"}} onClick={getTip}>{tipL?"…thinking":"✨ Opener"}</Btn></div>
+            {tipTxt ? <div style={{fontSize:13,color:C.t2,background:C.s2,borderRadius:8,padding:"8px 10px",lineHeight:1.5,whiteSpace:"pre-wrap"}}>{tipTxt}</div> : <div style={{fontSize:12,color:C.t3}}>Tap ✨ Opener for a Nucci-style line tailored to this exact lead.</div>}
+          </div>
+          <div style={{marginTop:12}}>
+            <input style={{...inp,marginBottom:10}} value={note} onChange={function(e){ setNote(e.target.value); }} placeholder="Quick note (optional) — saved to their log" />
+            <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+              <Btn onClick={function(){ logIt("No answer"); }}>No answer</Btn>
+              <Btn onClick={function(){ logIt("Left voicemail"); }}>Left VM</Btn>
+              <Btn v="primary" onClick={function(){ logIt("Talked — connected",{temp:"warm"}); }}>✓ Talked</Btn>
+              <Btn v="gold" onClick={function(){ logIt("Appointment set",{temp:"hot"}); }}>📅 Appointment</Btn>
+              <Btn v="rose" onClick={function(){ logIt("Not interested",{temp:"cold"}); }}>🚫 Not interested</Btn>
+              <Btn onClick={skip}>Skip ⏭</Btn>
+            </div>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+/* ── LISTING BUILDER — address → AI marketing copy (MLS / IG / FB) + staging → save ── */
+function PanelListingBuilder({listings,setListings,setTab}) {
+  var BLANK = {addr:"",beds:"",baths:"",sqft:"",lot:"",price:"",year:"",highlights:"",condition:"move-in ready"};
+  var [f,setF] = useState(BLANK);
+  var [out,setOut] = useState({full:"",short:"",ig:"",fb:""});
+  var [busy,setBusy] = useState("");
+  var [msg,setMsg] = useState("");
+  function set(k,v){ setF(function(p){ var n=Object.assign({},p); n[k]=v; return n; }); }
+  function facts(){ return [f.addr, f.beds&&(f.beds+" bed"), f.baths&&(f.baths+" bath"), f.sqft&&(f.sqft+" sqft"), f.lot&&(f.lot+" lot"), f.year&&("built "+f.year), f.price&&("listed "+f.price), f.condition].filter(Boolean).join(", "); }
+  function gen(kind){
+    if(!f.addr){ setMsg("Add at least the address first."); return; }
+    setBusy(kind); setMsg("");
+    var base = "You are writing marketing copy for a Sonoma County real estate listing. FACTS: "+facts()+". Standout features: "+(f.highlights||"none given")+". MUST be Fair-Housing compliant — describe the PROPERTY only, never the buyer or neighborhood demographics; no 'perfect for families', no schools-as-a-selling-point, no language about who would live there. No false or exaggerated claims. ";
+    var prompts = {
+      full: base+"Write a polished MLS listing description, 110-150 words, warm and vivid, leading with the best feature. Body only, no headline.",
+      short: base+"Write one punchy MLS headline / short remark, under 180 characters. Just the line.",
+      ig: base+"Write an Instagram caption: a scroll-stopping first line, then 3-4 short lines with a couple tasteful emojis, then 6 relevant local hashtags.",
+      fb: base+"Write a Facebook post, 2-3 friendly shareable sentences, ending with 'DM me for a private showing.'"
+    };
+    callAI(prompts[kind]).then(function(t){ setOut(function(p){ var n=Object.assign({},p); n[kind]=t; return n; }); setBusy(""); }).catch(function(){ setBusy(""); setMsg("AI hiccup — tap ✨ again."); });
+  }
+  function genAll(){ ["full","short","ig","fb"].forEach(function(k,i){ setTimeout(function(){ gen(k); }, i*450); }); }
+  function copy(t){ try{ navigator.clipboard.writeText(t); setMsg("Copied ✓"); }catch(e){} }
+  function save(){
+    if(!f.addr){ setMsg("Add the address first."); return; }
+    var rec = Object.assign({id:uid(), added:toDay(), status:"active"}, f, {copy:out});
+    setListings(function(p){ return [rec].concat(p||[]); });
+    setMsg("✓ Saved to My Listings. Build the video tour next.");
+  }
+  var OUTS = [{k:"full",l:"MLS Description"},{k:"short",l:"MLS Short / Headline"},{k:"ig",l:"Instagram Caption"},{k:"fb",l:"Facebook Post"}];
+  var STAGE = ["Declutter + depersonalize every room","Deep clean — especially kitchen + baths","Max natural light: open blinds, warm bulbs","Fresh neutral touches (towels, flowers)","Curb appeal: mow, edge, power-wash the entry","Photo order: exterior front → living → kitchen → primary → baths → yard → view"];
+  return (
+    <div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>🏗️ Listing Builder</div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:700}}>Take a new listing from address to marketing-ready in one place — AI writes your MLS description, a short headline, an Instagram caption and a Facebook post (all Fair-Housing guided), plus a staging checklist. Save it, then build your video tour.</div>
+      <Card title="1 · Listing details">
+        <Fld label="Property address"><input style={inp} value={f.addr} onChange={function(e){ set("addr",e.target.value); }} placeholder="123 Vine St, Santa Rosa, CA 95403" /></Fld>
+        <div style={{height:8}} />
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(104px,1fr))",gap:8}}>
+          <Fld label="Beds"><input style={inp} value={f.beds} onChange={function(e){ set("beds",e.target.value); }} /></Fld>
+          <Fld label="Baths"><input style={inp} value={f.baths} onChange={function(e){ set("baths",e.target.value); }} /></Fld>
+          <Fld label="Sq ft"><input style={inp} value={f.sqft} onChange={function(e){ set("sqft",e.target.value); }} /></Fld>
+          <Fld label="Lot"><input style={inp} value={f.lot} onChange={function(e){ set("lot",e.target.value); }} /></Fld>
+          <Fld label="Year"><input style={inp} value={f.year} onChange={function(e){ set("year",e.target.value); }} /></Fld>
+          <Fld label="Price"><input style={inp} value={f.price} onChange={function(e){ set("price",e.target.value); }} placeholder="$750,000" /></Fld>
+        </div>
+        <div style={{height:8}} />
+        <Fld label="Standout features (what makes it special)"><textarea style={{...inp,minHeight:70,resize:"vertical",fontFamily:"inherit"}} value={f.highlights} onChange={function(e){ set("highlights",e.target.value); }} placeholder="Remodeled chef's kitchen, pass-through window, bocce court, view deck, new roof…" /></Fld>
+        <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
+          <Btn v="primary" onClick={genAll}>✨ Generate all marketing</Btn>
+          <Btn onClick={save}>💾 Save to My Listings</Btn>
+        </div>
+        {msg ? <div style={{fontSize:12,color:C.ac,marginTop:8}}>{msg}</div> : null}
+      </Card>
+      <Card title="2 · Your marketing copy">
+        {OUTS.map(function(o){ return (
+          <div key={o.k} style={{marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+              <div style={{fontSize:12.5,fontWeight:600,color:C.t2}}>{o.l}</div>
+              <Btn style={{fontSize:10,padding:"3px 8px"}} onClick={function(){ gen(o.k); }}>{busy===o.k?"…":"✨"}</Btn>
+              {out[o.k] ? <Btn style={{fontSize:10,padding:"3px 8px"}} onClick={function(){ copy(out[o.k]); }}>📋 Copy</Btn> : null}
+            </div>
+            <textarea style={{...inp,minHeight:o.k==="short"?46:90,resize:"vertical",fontFamily:"inherit",lineHeight:1.5}} value={out[o.k]||""} onChange={function(e){ var v=e.target.value; setOut(function(p){ var n=Object.assign({},p); n[o.k]=v; return n; }); }} placeholder={busy===o.k?"Writing…":"Tap ✨ to generate, or type your own."} />
+          </div>
+        ); })}
+        <div style={{fontSize:11,color:C.t3,lineHeight:1.5}}>⚖️ AI drafts are Fair-Housing guided, but you're the licensee — read each before it goes live.</div>
+      </Card>
+      <Card title="3 · Staging checklist">
+        {STAGE.map(function(s,i){ return <div key={i} style={{fontSize:13,color:C.t2,padding:"5px 0",borderBottom:i<STAGE.length-1?("1px solid "+C.br):"none"}}>☐ {s}</div>; })}
+      </Card>
+      <Card title="4 · Video tour">
+        <div style={{fontSize:13,color:C.t2,lineHeight:1.6}}>Once photos are in, build the walkthrough with your tour workflow — Ken Burns from the photo order above, never altering the photos and keeping the sequence true to the home. Then the listing's ready to go live across MLS, Instagram and Facebook.</div>
+      </Card>
+    </div>
+  );
+}
+
 function PanelListings({listings,setListings,setTab}) {
   var blank = {addr:"",price:"",beds:"",baths:"",sqft:"",feature:"",link:""};
   var [form,setForm] = useState(blank);
