@@ -1754,11 +1754,14 @@ function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMar
   var [socEdit,setSocEdit] = useState(false);
   var [siteStats,setSiteStats] = useState(null);
   var [gsc,setGsc] = useState(null);
+  var [delivery,setDelivery] = useState(null);
   useEffect(function(){
     fetch("https://mdlonovzxkpcahopwvac.supabase.co/functions/v1/site-visits")
       .then(function(r){ return r.json(); }).then(function(d){ if(d&&d.ok) setSiteStats(d); }).catch(function(){});
     fetch("https://mdlonovzxkpcahopwvac.supabase.co/functions/v1/gsc-queries")
       .then(function(r){ return r.json(); }).then(function(d){ if(d&&d.ok) setGsc(d); }).catch(function(){});
+    fetch("https://mdlonovzxkpcahopwvac.supabase.co/functions/v1/delivery-stats")
+      .then(function(r){ return r.json(); }).then(function(d){ if(d&&d.ok) setDelivery(d); }).catch(function(){});
   }, []);
   var soc = (market && market.social) || {};
   function setSoc(plat, field, val){
@@ -1849,7 +1852,39 @@ function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMar
         </div>
       </div>
       <div style={{marginTop:14}}>
-        <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>📈 Analytics <span style={{fontSize:11,fontWeight:400,color:C.t3}}>— from your CRM data</span></div>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>📧 Lead Email Delivery <span style={{fontSize:11,fontWeight:400,color:C.t3}}>— neighborhood MLS alerts, live from your backend</span></div>
+        {delivery ? (
+        <Card>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+            {[
+              {n:(delivery.today&&delivery.today.emails)||0, l:"Sent today"},
+              {n:(delivery.month&&delivery.month.emails)||0, l:"This month"},
+              {n:(delivery.allTime&&delivery.allTime.emails)||0, l:"All-time emails"},
+              {n:(delivery.month&&delivery.month.leads)||0, l:"Leads reached (mo)"}
+            ].map(function(s,i){ return (
+              <div key={i} style={{background:C.skL,border:"1px solid "+C.skB,borderRadius:9,padding:"10px 12px"}}>
+                <div style={{fontSize:22,fontWeight:700,color:C.sk,lineHeight:1}}>{Number(s.n).toLocaleString()}</div>
+                <div style={{fontSize:10.5,color:C.t2,marginTop:4}}>{s.l}</div>
+              </div>
+            ); })}
+          </div>
+          <div style={{display:"flex",alignItems:"flex-end",gap:3,height:44,marginTop:12}}>
+            {(delivery.daily||[]).map(function(x,i){
+              var mx = Math.max.apply(null,(delivery.daily||[]).map(function(y){ return y.updates||0; })) || 1;
+              return <div key={i} title={x.day+": "+x.emails+" emails, "+x.updates+" updates"} style={{flex:1,background:C.sk,opacity:0.82,height:Math.max(3,Math.round((x.updates||0)/mx*44))+"px",borderRadius:"2px 2px 0 0"}} />;
+            })}
+          </div>
+          <div style={{fontSize:10,color:C.t3,marginTop:3}}>Daily updates delivered — last 14 days</div>
+          <div style={{fontSize:11.5,color:C.t2,marginTop:11,display:"flex",gap:14,flexWrap:"wrap",alignItems:"center",borderTop:"1px solid "+C.br,paddingTop:10}}>
+            <span>Last sent: <b style={{color:C.tx}}>{delivery.lastSent ? new Date(delivery.lastSent).toLocaleString("en-US",{timeZone:"America/Los_Angeles",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : "—"}</b></span>
+            <span style={{color:C.sk,fontWeight:600}}>✓ {(delivery.backlog&&delivery.backlog.eligibleStuck)||0} stuck</span>
+            <span>{(delivery.backlog&&delivery.backlog.prospectHidden)||0} suppressed</span>
+            <span>{(delivery.backlog&&delivery.backlog.noEmail)||0} no email on file</span>
+          </div>
+          <div style={{fontSize:11,color:C.t3,marginTop:8}}>All-time: {(delivery.byType&&delivery.byType.newListings)||0} new listings · {(delivery.byType&&delivery.byType.priceChanges)||0} price moves · {(delivery.byType&&delivery.byType.underContract)||0} under contract · {(delivery.byType&&delivery.byType.sold)||0} sold</div>
+        </Card>
+        ) : (<Card><div style={{fontSize:12,color:C.t3}}>Loading delivery stats…</div></Card>)}
+        <div style={{fontSize:14,fontWeight:700,marginBottom:8,marginTop:14}}>📈 Analytics <span style={{fontSize:11,fontWeight:400,color:C.t3}}>— from your CRM data</span></div>
         <TrendChart title="New Leads — last 6 months" points={trend} />
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
           <BarList title="Leads by Source" data={bySource} color={C.ac} />
