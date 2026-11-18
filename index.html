@@ -1355,7 +1355,7 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
       {_qq && <div style={{fontSize:11,color:C.t3,marginBottom:14}}>Showing {_hits} match{_hits===1?"":"es"} for “{q}”. <span style={{color:C.ac,cursor:"pointer"}} onClick={function(){ setQ(""); }}>clear</span></div>}
       {watching.length>0 && <Card title={"👁 Watching — Active Listings (" + watching.length + ")"}>
         <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Listings you're monitoring — usually an expired that <b>relisted with another agent</b>. You can't solicit the listing while it's active, so watch for it to <b>expire again</b> (your moment) or <b>sell</b> (drops off automatically). The daily accuracy check updates these each morning.</div>
-        {watching.map(function(l){
+        <CollapsibleList items={watching} initial={6} render={function(l){
           var st = l.watchStatus||"active";
           var badge = st==="expired" ? {t:"🎯 Expired again — call now",c:C.ro} : st==="pending" ? {t:"📝 Pending",c:C.go} : {t:"🟢 Active",c:C.t2};
           return (
@@ -1369,7 +1369,7 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
               <span style={{fontSize:11,color:C.ac}}>Open →</span>
             </div>
           );
-        })}
+        }} />
       </Card>}
       <GroupEmailCard
         title={"📧 Email the Expired List (" + uniqEmailLeads(expiredNew.concat(expired)).length + " with email)"}
