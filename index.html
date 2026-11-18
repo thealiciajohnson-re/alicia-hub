@@ -1274,6 +1274,20 @@ function GroupEmailCard({title, blurb, recips, defSubject, defBody, tag, blastFi
   );
 }
 
+function CollapsibleList(props){
+  var items = props.items||[];
+  var render = props.render;
+  var initial = props.initial||6;
+  var [clOpen,setClOpen]=useState(false);
+  if(items.length===0) return null;
+  var shown = clOpen ? items : items.slice(0,initial);
+  return (
+    <div>
+      {shown.map(render)}
+      {items.length>initial && <div onClick={function(){ setClOpen(!clOpen); }} style={{cursor:"pointer",textAlign:"center",padding:"9px 0 2px",marginTop:2,fontSize:12,fontWeight:700,color:C.ac,userSelect:"none"}}>{clOpen ? ("▴ Collapse list (hide "+(items.length-initial)+")") : ("▾ Show all "+items.length+" — tap to expand")}</div>}
+    </div>
+  );
+}
 function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
   // Auto-captured MLS expireds (carry an mlNum) start in their own "new — cold call" inbox.
   // Once you tap ✓ Contacted they move into your regular watched-Expired list, alongside ones you added by hand.
@@ -1365,11 +1379,11 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
         tag="expired-blast" blastField="expiredBlast" setLeads={setLeads} />
       <Card title={"📥 New Expired — Cold Call (" + expiredNew.length + ")"}>
         <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Fresh expired listings auto-pulled from your MLS emails each morning — homes that didn't sell. Look up the owner and cold call. Tap <b>✓ Contacted</b> once you've called and it moves to your watched list below.</div>
-        {expiredNew.length===0 ? <div style={{color:C.t3,fontSize:13}}>None right now — new expireds from your MLS email land here automatically.</div> : expiredNew.map(row)}
+        {expiredNew.length===0 ? <div style={{color:C.t3,fontSize:13}}>None right now — new expireds from your MLS email land here automatically.</div> : <CollapsibleList items={expiredNew} render={row} initial={6} />}
       </Card>
       <Card title={"⏳ Expired Listings — Watching (" + expired.length + ")"}>
         <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Expireds you've already contacted or added by hand — the ones you're actively working.</div>
-        {expired.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — cold-call a new expired above (✓ Contacted), or tap 🎯 Expired on any lead.</div> : expired.map(row)}
+        {expired.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — cold-call a new expired above (✓ Contacted), or tap 🎯 Expired on any lead.</div> : <CollapsibleList items={expired} render={row} initial={6} />}
       </Card>
       <FcImportCard leads={leads} setLeads={setLeads} />
       <GroupEmailCard
@@ -1386,18 +1400,18 @@ function PanelWatch({leads,setFocusLead,setTab,setLeads,dismissLead}) {
         tag="divorce-blast" blastField="divorceBlast" setLeads={setLeads} />
       <Card title={"🏚️ New Prospect Leads — Cold Call (" + foreNew.length + ")"}>
         <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Motivated-seller properties auto-pulled from your <b>PropertyRadar</b> & <b>Auction.com</b> lists — <b>Foreclosure · Pre-Foreclosure · Divorce · Auction</b>, etc. Each lead is tagged with the list it came from (shown on the row). You get the address only — <b>open each to add the owner's name & phone</b>, then cold call. Tap <b>✓ Contacted</b> once you've reached out.</div>
-        {foreNew.length===0 ? <div style={{color:C.t3,fontSize:13}}>None right now — new properties from your PropertyRadar / Auction.com lists land here automatically.</div> : foreNew.map(row)}
+        {foreNew.length===0 ? <div style={{color:C.t3,fontSize:13}}>None right now — new properties from your PropertyRadar / Auction.com lists land here automatically.</div> : <CollapsibleList items={foreNew} render={row} initial={6} />}
       </Card>
       <Card title={"🏚️ Prospect Leads — Working (" + foreWork.length + ")"}>
         <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Foreclosure / divorce / pre-foreclosure leads you've already contacted or added by hand.</div>
-        {foreWork.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — cold-call a new one above (✓ Contacted).</div> : foreWork.map(row)}
+        {foreWork.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — cold-call a new one above (✓ Contacted).</div> : <CollapsibleList items={foreWork} render={row} initial={6} />}
       </Card>
       <Card title={"🏷️ For Sale By Owner (" + fsbo.length + ")"}>
-        {fsbo.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — open a lead and tap 🎯 FSBO to add them here.</div> : fsbo.map(row)}
+        {fsbo.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — open a lead and tap 🎯 FSBO to add them here.</div> : <CollapsibleList items={fsbo} render={row} initial={6} />}
       </Card>
       <Card title={"🚫 Lost — Monitoring (" + lost.length + ")"}>
         <div style={{fontSize:11,color:C.t3,marginBottom:6,lineHeight:1.4}}>Sellers who listed with another agent. Watching for their listing to expire so you can follow up. Sorted by soonest expiration — 🔴 red means it's time to reach out.</div>
-        {lost.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — open a lead and tap 🚫 Lost to monitor them.</div> : lost.map(lostRow)}
+        {lost.length===0 ? <div style={{color:C.t3,fontSize:13}}>None yet — open a lead and tap 🚫 Lost to monitor them.</div> : <CollapsibleList items={lost} render={lostRow} initial={6} />}
       </Card>
       <div style={{borderTop:"1px solid "+C.br,margin:"22px 0 16px"}} />
       <PanelMojo leads={leads} setLeads={setLeads} />
