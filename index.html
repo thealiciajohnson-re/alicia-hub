@@ -1848,6 +1848,7 @@ function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMar
   }
   var td = toDay();
   var todayR = rems.filter(function(r){ return r.date===td && !r.done; });
+  var mlsAlerts = rems.filter(function(r){ return r && !r.done && /^(lc_|exp_new_)/.test(String(r.id)); });
   var hot = leads.filter(function(l){ return l.temp==="hot"; }).slice(0,5);
   // Live, self-correcting stats derived from real data (no more drifting manual counters).
   var wkAgo = (function(){ var d=new Date(); d.setDate(d.getDate()-7); return d.toISOString().split("T")[0]; })();
@@ -1883,6 +1884,20 @@ function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMar
         {[["New Leads",live.leads,C.aL,C.ac,C.aB,"added · past 7 days"],["Appointments",live.appts,C.gL,C.go,C.gB,"deals at appt stage"],["Listings",live.listings,C.s2,C.tx,C.br,"active on market"],["Closed",live.closed,C.rL,C.ro,C.rB,"closed deals"]].map(function(x){
           return <div key={x[0]} style={{background:x[2],border:"1px solid "+x[4],borderRadius:9,padding:"10px 12px"}}><div style={{fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:".06em",color:C.t3,marginBottom:3}}>{x[0]}</div><div style={{fontSize:26,fontWeight:700,color:x[3],lineHeight:1,fontFamily:"monospace"}}>{x[1]}</div><div style={{fontSize:11,color:C.t3,marginTop:3}}>{x[5]}</div></div>;
         })}
+      </div>
+      <div style={{marginBottom:12}}>
+        <Card title={"🏠 Lead & Address Alerts" + (mlsAlerts.length ? " (" + mlsAlerts.length + ")" : "")}>
+          <div style={{fontSize:11.5,color:C.t3,marginBottom:8,lineHeight:1.4}}>Daily MLS watch on all your leads + Follow Up Boss addresses — <b>expired · new listing · pending · sold</b>. Posts here automatically every morning.</div>
+          {mlsAlerts.length===0 ? <div style={{color:C.t3,fontSize:13}}>✓ No new changes right now — you're caught up.</div> : mlsAlerts.slice(0,8).map(function(r){
+            var isExp=/EXPIRED|expired/.test(r.title||"");
+            return <div key={r.id} onClick={function(){ if(r.leadId){ if(setFocusLead) setFocusLead(r.leadId); setTab("leads"); } }} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"7px 0",borderBottom:"1px solid "+C.br,cursor:r.leadId?"pointer":"default"}}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:isExp?C.ro:C.ac,marginTop:5,flexShrink:0}} />
+              <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600}}>{r.title}</div>{r.note?<div style={{fontSize:11,color:C.t3}}>{r.note}</div>:null}</div>
+              {r.leadId?<span style={{fontSize:11,color:C.ac,whiteSpace:"nowrap"}}>Open →</span>:null}
+            </div>;
+          })}
+          {mlsAlerts.length>8 && <Btn onClick={function(){ setTab("rems"); }} style={{fontSize:11,marginTop:8}}>View all {mlsAlerts.length} in Reminders →</Btn>}
+        </Card>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <div>
