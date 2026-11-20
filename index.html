@@ -1848,7 +1848,9 @@ function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMar
   }
   var td = toDay();
   var mlsAlerts = rems.filter(function(r){ return r && !r.done && /^(lc_|exp_new_)/.test(String(r.id)); });
-  var dueCalls = (leads||[]).filter(function(l){ return l && !hideFromLeads(l) && l.fu && String(l.fu) <= td; }).sort(function(a,b){ return String(a.fu).localeCompare(String(b.fu)); });
+  var allDue = (leads||[]).filter(function(l){ return l && !hideFromLeads(l) && l.fu && String(l.fu) <= td; });
+  var _tscore = function(l){ return l.temp==="hot"?0:l.temp==="warm"?1:2; };
+  var callBlock = (leads||[]).filter(function(l){ return l && !hideFromLeads(l) && (l.phone||l.phone2) && (l.temp==="hot"||l.temp==="warm"||(l.fu && String(l.fu)<=td)); }).sort(function(a,b){ var ta=_tscore(a),tb=_tscore(b); if(ta!==tb) return ta-tb; return String(a.fu||"9999-99").localeCompare(String(b.fu||"9999-99")); }).slice(0,20);
   var todayR = rems.filter(function(r){ return r.date===td && !r.done && !/^(lc_|exp_new_)/.test(String(r.id)); });
   var hot = leads.filter(function(l){ return l.temp==="hot"; }).slice(0,5);
   // Live, self-correcting stats derived from real data (no more drifting manual counters).
@@ -1889,7 +1891,7 @@ function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMar
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(128px,1fr))",gap:8,margin:"10px 0 2px"}}>
             {[
-              {n:dueCalls.length, l:"📞 Calls due today", tab:"leads", c:C.ac},
+              {n:callBlock.length, l:"📞 Today's call block", tab:"leads", c:C.ac},
               {n:mlsAlerts.length, l:"🏠 Home alerts", tab:null, c:C.ro},
               {n:bdays.filter(function(x){ return x.du===0; }).length, l:"🎂 Birthdays today", tab:"anniv", c:C.go},
               {n:todayR.length, l:"📅 Reminders today", tab:"rems", c:C.ac}
@@ -1900,15 +1902,15 @@ function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMar
               </div>;
             })}
           </div>
-          {dueCalls.length>0 ? <div style={{marginTop:8}}>
-            <div style={{fontSize:12,fontWeight:700,color:C.t2,margin:"4px 0 2px"}}>Your call block — start here 📞</div>
-            {dueCalls.slice(0,5).map(function(l){
+          {callBlock.length>0 ? <div style={{marginTop:8}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.t2,margin:"4px 0 2px"}}>Your call block — start with your hottest 📞</div>
+            {callBlock.slice(0,8).map(function(l){
               return <div key={l.id} onClick={function(){ if(setFocusLead) setFocusLead(l.id); setTab("leads"); }} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid "+C.br,cursor:"pointer"}}>
-                <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600}}>{l.first} {l.last}{l.temp==="hot"?" 🔥":""}</div><div style={{fontSize:11,color:C.t3}}>{[l.phone,l.addr].filter(Boolean).join(" · ")||l.email||"—"}</div></div>
+                <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600}}>{l.first} {l.last}{l.temp==="hot"?" 🔥":l.temp==="warm"?" 🌤":""}</div><div style={{fontSize:11,color:C.t3}}>{[l.phone,l.addr].filter(Boolean).join(" · ")||l.email||"—"}</div></div>
                 <span style={{fontSize:11,color:C.ac,whiteSpace:"nowrap"}}>Call →</span>
               </div>;
             })}
-            {dueCalls.length>5 && <div onClick={function(){ setTab("leads"); }} style={{fontSize:11,color:C.ac,cursor:"pointer",marginTop:6}}>View all {dueCalls.length} due →</div>}
+            <div onClick={function(){ setTab("leads"); }} style={{fontSize:11,color:C.ac,cursor:"pointer",marginTop:6}}>View all {allDue.length} due →</div>
           </div> : <div style={{fontSize:13,color:C.t3,marginTop:8}}>✓ No calls due today — you're caught up.</div>}
         </Card>
       </div>
