@@ -119,13 +119,13 @@ const tiktokUrl = h => "https://tiktok.com/@"+cleanHandle(h);
 // but anything manually added, or once contacted ("working"), stays in All Leads.
 const hideFromLeads = l => {
   if(!l) return false;
-  var p = l.prospect;
-  if(p==="lost") return true;                                  // monitoring only — never in Leads
-  if(p==="expired") return true;                               // Expired list is SEPARATE — lives only in the Expired/FSBO/Lost tab, never in All Leads (until converted → Nurture, which clears prospect)
-  if(p==="circle") return true;                                // Circle-prospecting neighbors live ONLY in the Circle Prospecting tab, never in All Leads
-  if(["foreclosure","fsbo"].indexOf(p)<0) return false;
-  if(l.contacted) return false;                                // contacted = working = show in Leads
-  return !!(l.mlNum || l.radarId || l.listName);               // hide only NEW auto-captured; manual entries stay
+  if(!l.prospect) return false;                                // real leads always show
+  // Alicia's rule (2026-11-20): any lead you've ENGAGED — contacted, 👁 watching, or marked hot/warm — ALWAYS
+  // shows in All Leads too, no matter its tag/section, so you can look anyone up here. The lead still ALSO
+  // appears in its category tab (Expired/FSBO/Lost, Circle). Only cold bulk prospects you haven't worked yet
+  // (un-touched circle neighbors, auto-captured expireds/foreclosures) stay in their own tab until you work them.
+  if(l.contacted || l.watch===true || l.temp==="hot" || l.temp==="warm") return false;
+  return true;
 };
 
 const AGENT = {
