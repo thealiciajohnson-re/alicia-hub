@@ -3683,27 +3683,51 @@ function PanelListingBuilder({listings,setListings,setTab}) {
 }
 
 function PanelListings({listings,setListings,setTab}) {
-  var blank = {addr:"",price:"",beds:"",baths:"",sqft:"",feature:"",link:""};
+  var blank = {addr:"",price:"",beds:"",baths:"",sqft:"",feature:"",link:"",saleType:"standard",status:"prospect",owner:"",ownerPhone:"",ownerEmail:"",commission:"",signDate:"",listDate:"",expDate:""};
   var [form,setForm] = useState(blank);
   var [editId,setEditId] = useState("");
   var [st,setSt] = useState("");
+  var SALE_TYPES = [["standard","Standard sale"],["short","Short sale"],["foreclosure","Foreclosure / REO"],["probate","Probate"],["trust","Trust sale"],["other","Other"]];
+  var SALE_LBL = {standard:"Standard",short:"💠 Short sale",foreclosure:"🏚️ Foreclosure/REO",probate:"Probate",trust:"Trust sale",other:"Other"};
+  var STATUS = [["prospect","🎯 Prospect"],["signed","✍️ Signed"],["active","📣 Active"],["pending","🤝 Under contract"],["sold","🔑 Sold"],["expired","⚠️ Expired/Withdrawn"]];
+  var STATUS_LBL = {prospect:"🎯 Prospect",signed:"✍️ Listing signed",active:"📣 Active on market",pending:"🤝 Under contract",sold:"🔑 Sold",expired:"⚠️ Expired/Withdrawn"};
   function fld(k){ return function(e){ setForm(function(p){ return {...p,[k]:e.target.value}; }); }; }
   function save(){
     if(!form.addr.trim()){ setSt("Enter at least an address."); return; }
     if(editId){ setListings(function(p){ return p.map(function(x){ return x.id===editId?{...x,...form}:x; }); }); setSt("Listing updated."); setEditId(""); }
-    else { setListings(function(p){ return [{id:uid(),...form,added:toDay()},...p]; }); setSt("Listing saved — it's now ready in the 🏡 New Listing email."); }
+    else { setListings(function(p){ return [{id:uid(),...form,added:toDay()},...p]; }); setSt("Listing saved."); }
     setForm(blank);
   }
-  function edit(l){ setEditId(l.id); setForm({addr:l.addr||"",price:l.price||"",beds:l.beds||"",baths:l.baths||"",sqft:l.sqft||"",feature:l.feature||"",link:l.link||""}); setSt(""); }
+  function edit(l){ setEditId(l.id); setForm({addr:l.addr||"",price:l.price||"",beds:l.beds||"",baths:l.baths||"",sqft:l.sqft||"",feature:l.feature||"",link:l.link||"",saleType:l.saleType||"standard",status:l.status||"prospect",owner:l.owner||"",ownerPhone:l.ownerPhone||"",ownerEmail:l.ownerEmail||"",commission:l.commission||"",signDate:l.signDate||"",listDate:l.listDate||"",expDate:l.expDate||""}); setSt(""); if(typeof window!=="undefined"&&window.scrollTo) window.scrollTo(0,0); }
   function del(id){ setListings(function(p){ return p.filter(function(x){ return x.id!==id; }); }); if(editId===id){ setEditId(""); setForm(blank); } }
+  function setStatus(l,s){
+    setListings(function(p){ return p.map(function(x){
+      if(x.id!==l.id) return x;
+      var patch = {status:s};
+      if(s==="signed" && !x.signDate) patch.signDate = toDay();
+      if(s==="active" && !x.listDate) patch.listDate = toDay();
+      return {...x,...patch};
+    }); });
+  }
+  function expInfo(l){
+    if(!l.expDate || l.status==="sold") return null;
+    var d = Math.round((new Date(l.expDate+"T12:00:00") - new Date(toDay()+"T12:00:00"))/86400000);
+    if(d<0) return {txt:"⚠️ Listing agreement EXPIRED "+Math.abs(d)+" day"+(Math.abs(d)===1?"":"s")+" ago ("+fmtDate(l.expDate)+")",c:C.ro,bg:C.rL,b:C.rB};
+    if(d<=30) return {txt:"⏳ Agreement expires in "+d+" day"+(d===1?"":"s")+" ("+fmtDate(l.expDate)+")",c:C.go,bg:C.gL,b:C.gB};
+    return null;
+  }
   return (
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>🏡 My Listings</div>
-      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:680}}>Save a home's details once here. Then the <b>🏡 New Listing</b> button on any lead auto-fills a ready-to-send announcement email — real address, price, and specs, no placeholders to type.</div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:680}}>Track every listing you carry — status, sale type, the owners, and your listing-agreement clock. The <b>🏡 New Listing</b> button on any lead still auto-fills a ready-to-send announcement from the address, price, and specs here.</div>
       <Card title={editId?"Edit listing":"Add a listing"}>
-        <Row><Fld label="Address *"><input style={inp} placeholder="456 Oak St, Santa Rosa, CA 95403" value={form.addr} onChange={fld("addr")} /></Fld><Fld label="Price ($)"><input style={inp} type="number" placeholder="715000" value={form.price} onChange={fld("price")} /></Fld></Row>
+        <Row><Fld label="Address *"><input style={inp} placeholder="456 Oak St, Santa Rosa, CA 95403" value={form.addr} onChange={fld("addr")} /></Fld><Fld label="List price ($)"><input style={inp} type="number" placeholder="715000" value={form.price} onChange={fld("price")} /></Fld></Row>
         <Row cols="1fr 1fr 1fr"><Fld label="Beds"><input style={inp} placeholder="3" value={form.beds} onChange={fld("beds")} /></Fld><Fld label="Baths"><input style={inp} placeholder="2" value={form.baths} onChange={fld("baths")} /></Fld><Fld label="Sq ft"><input style={inp} placeholder="1850" value={form.sqft} onChange={fld("sqft")} /></Fld></Row>
-        <Fld label="Standout feature"><input style={inp} placeholder="Remodeled kitchen, big backyard, walk to downtown" value={form.feature} onChange={fld("feature")} /></Fld>
+        <Row cols="1.4fr 1fr"><Fld label="Sale type"><select style={inp} value={form.saleType} onChange={fld("saleType")}>{SALE_TYPES.map(function(s){ return <option key={s[0]} value={s[0]}>{s[1]}</option>; })}</select></Fld><Fld label="My commission (%)"><input style={inp} placeholder="4" value={form.commission} onChange={fld("commission")} /></Fld></Row>
+        <Row cols="1fr 1fr 1fr"><Fld label="Owner name(s)"><input style={inp} placeholder="Andres Quezada" value={form.owner} onChange={fld("owner")} /></Fld><Fld label="Owner phone"><input style={inp} placeholder="707-555-1234" value={form.ownerPhone} onChange={fld("ownerPhone")} /></Fld><Fld label="Owner email"><input style={inp} placeholder="owner@email.com" value={form.ownerEmail} onChange={fld("ownerEmail")} /></Fld></Row>
+        <Row cols="1fr 1fr 1fr"><Fld label="Signed date"><input style={inp} type="date" value={form.signDate} onChange={fld("signDate")} /></Fld><Fld label="Listed (live) date"><input style={inp} type="date" value={form.listDate} onChange={fld("listDate")} /></Fld><Fld label="Agreement expires"><input style={inp} type="date" value={form.expDate} onChange={fld("expDate")} /></Fld></Row>
+        <Fld label="Status"><select style={inp} value={form.status} onChange={fld("status")}>{STATUS.map(function(s){ return <option key={s[0]} value={s[0]}>{s[1]}</option>; })}</select></Fld>
+        <Fld label="Standout feature (used in the announcement email — keep it buyer-facing)"><input style={inp} placeholder="Remodeled kitchen, big backyard, walk to downtown" value={form.feature} onChange={fld("feature")} /></Fld>
         <Fld label="Listing link"><input style={inp} placeholder="https://… (Zillow, MLS, or your website)" value={form.link} onChange={fld("link")} /></Fld>
         <div style={{display:"flex",gap:7,marginTop:8}}>
           <Btn v="primary" onClick={save}>{editId?"Update listing":"Save listing"}</Btn>
@@ -3714,19 +3738,35 @@ function PanelListings({listings,setListings,setTab}) {
       {listings.length===0 ? (
         <Card><div style={{color:C.t3,fontSize:13,textAlign:"center",padding:20}}>No listings saved yet. Add one above and it'll be ready to drop into New-Listing emails.</div></Card>
       ) : listings.map(function(l){
+        var ex = expInfo(l);
+        var saleTag = (l.saleType && l.saleType!=="standard") ? SALE_LBL[l.saleType] : "";
         return (
           <Card key={l.id} style={{marginTop:8}}>
             <div style={{display:"flex",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
               <div style={{flex:1,minWidth:200}}>
-                <div style={{fontWeight:600,fontSize:14}}>{l.addr}</div>
-                <div style={{fontSize:12,color:C.t2,marginTop:2}}>{l.price?"$"+Number(l.price).toLocaleString():"—"}{l.beds?" · "+l.beds+" bd":""}{l.baths?" · "+l.baths+" ba":""}{l.sqft?" · "+Number(l.sqft).toLocaleString()+" sqft":""}</div>
-                {l.feature && <div style={{fontSize:12,color:C.t3,marginTop:2}}>{l.feature}</div>}
+                <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
+                  <span style={{fontWeight:600,fontSize:14}}>{l.addr}</span>
+                  <span style={{fontSize:10.5,fontWeight:700,color:C.sk,background:C.skL,border:"1px solid "+C.skB,borderRadius:5,padding:"1px 7px"}}>{STATUS_LBL[l.status||"prospect"]}</span>
+                  {saleTag && <span style={{fontSize:10.5,fontWeight:700,color:C.ro,background:C.rL,border:"1px solid "+C.rB,borderRadius:5,padding:"1px 7px"}}>{saleTag}</span>}
+                </div>
+                <div style={{fontSize:12,color:C.t2,marginTop:3}}>{l.price?"$"+Number(l.price).toLocaleString():"—"}{l.beds?" · "+l.beds+" bd":""}{l.baths?" · "+l.baths+" ba":""}{l.sqft?" · "+Number(l.sqft).toLocaleString()+" sqft":""}{l.commission?" · "+l.commission+"% comm":""}</div>
+                {(l.owner||l.ownerPhone||l.ownerEmail) && <div style={{fontSize:11.5,color:C.t3,marginTop:3}}>{l.owner?"👤 "+l.owner:""}{l.ownerPhone?"  ·  📞 "+l.ownerPhone:""}{l.ownerEmail?"  ·  ✉️ "+l.ownerEmail:""}</div>}
+                {(l.signDate||l.listDate||l.expDate) && <div style={{fontSize:11.5,color:C.t3,marginTop:2}}>{l.signDate?"Signed "+fmtDate(l.signDate):""}{l.listDate?"  ·  Listed "+fmtDate(l.listDate):""}{l.expDate?"  ·  Expires "+fmtDate(l.expDate):""}</div>}
+                {ex && <div style={{fontSize:11.5,fontWeight:600,color:ex.c,background:ex.bg,border:"1px solid "+ex.b,borderRadius:6,padding:"3px 8px",marginTop:5,display:"inline-block"}}>{ex.txt}</div>}
+                {l.feature && <div style={{fontSize:12,color:C.t3,marginTop:4}}>{l.feature}</div>}
                 {l.link && <div style={{fontSize:11,color:C.sk,marginTop:2,wordBreak:"break-all"}}>{l.link}</div>}
               </div>
               <div style={{display:"flex",gap:5}}>
                 <Btn style={{fontSize:11}} onClick={function(){ edit(l); }}>Edit</Btn>
                 <Btn v="rose" style={{fontSize:11}} onClick={function(){ del(l.id); }}>Delete</Btn>
               </div>
+            </div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:9,paddingTop:9,borderTop:"1px solid "+C.br}}>
+              <span style={{fontSize:10.5,color:C.t3,alignSelf:"center",marginRight:2}}>Set status:</span>
+              {STATUS.map(function(s){
+                var on = (l.status||"prospect")===s[0];
+                return <span key={s[0]} onClick={function(){ setStatus(l,s[0]); }} style={{fontSize:10.5,fontWeight:on?700:500,cursor:"pointer",borderRadius:5,padding:"2px 8px",color:on?"#fff":C.t2,background:on?C.sk:C.sur,border:"1px solid "+(on?C.sk:C.brm)}}>{s[1]}</span>;
+              })}
             </div>
           </Card>
         );
