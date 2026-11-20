@@ -1847,8 +1847,8 @@ function PanelDash({leads,rems,deals,act,goals,setTab,setFocusLead,market,setMar
     setMarket(function(m){ var s=Object.assign({}, m.social||{}); s[plat]=Object.assign({}, s[plat]||{}); s[plat][field]=val; s.updated=toDay(); return Object.assign({}, m, {social:s}); });
   }
   var td = toDay();
-  var todayR = rems.filter(function(r){ return r.date===td && !r.done; });
   var mlsAlerts = rems.filter(function(r){ return r && !r.done && /^(lc_|exp_new_)/.test(String(r.id)); });
+  var todayR = rems.filter(function(r){ return r.date===td && !r.done && !/^(lc_|exp_new_)/.test(String(r.id)); });
   var hot = leads.filter(function(l){ return l.temp==="hot"; }).slice(0,5);
   // Live, self-correcting stats derived from real data (no more drifting manual counters).
   var wkAgo = (function(){ var d=new Date(); d.setDate(d.getDate()-7); return d.toISOString().split("T")[0]; })();
