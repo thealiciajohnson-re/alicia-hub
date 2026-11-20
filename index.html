@@ -28,7 +28,7 @@ const { useState, useEffect, useRef } = React;
 const SK = {
   leads:"hub:leads2", rems:"hub:rems2", deals:"hub:deals2", cmas:"hub:cmas2",
   goals:"hub:goals2", act:"hub:act2", scores:"hub:scores2",
-  txs:"hub:txs2", oh:"hub:oh2", seeded:"hub:seeded3", enrolled:"hub:enrolled2", apikey:"hub:apikey2", listings:"hub:listings2", market:"hub:market2", dismissed:"hub:dismiss2", social:"hub:social2"
+  txs:"hub:txs2", oh:"hub:oh2", seeded:"hub:seeded3", enrolled:"hub:enrolled2", apikey:"hub:apikey2", listings:"hub:listings2", market:"hub:market2", dismissed:"hub:dismiss2", social:"hub:social2", fubsync:"hub:fubsync"
 };
 /* ── Cloud config (Supabase) ─────────────────────────────────── */
 const SUPABASE_URL = "https://mdlonovzxkpcahopwvac.supabase.co";
@@ -622,6 +622,7 @@ function App() {
   });
   const [social, setSocial] = useState([]);   // social content calendar (posts across platforms)
   const [cmas, setCmas] = useState([]);   // saved CMAs (comparative market analyses)
+  const [fub, setFub] = useState([]);   // Follow Up Boss sync tab — read-only mirror of FUB, kept separate from leads
   const [dismissed, setDismissed] = useState([]);   // deleted leads (tombstones) so FUB sync won't re-add them
   const [apiKey, setApiKey] = useState("");
   const [akInput, setAkInput] = useState("");
@@ -633,8 +634,9 @@ function App() {
   useEffect(function() {
     (async function() {
       const seeded = await sget(SK.seeded);
-      const [l,r,d,g,a,sc,tx,ohg,enr,ak,lst,mkt,dis,soc,cma] = await Promise.all([sget(SK.leads),sget(SK.rems),sget(SK.deals),sget(SK.goals),sget(SK.act),sget(SK.scores),sget(SK.txs),sget(SK.oh),sget(SK.enrolled),sget(SK.apikey),sget(SK.listings),sget(SK.market),sget(SK.dismissed),sget(SK.social),sget(SK.cmas)]);
+      const [l,r,d,g,a,sc,tx,ohg,enr,ak,lst,mkt,dis,soc,cma,fb] = await Promise.all([sget(SK.leads),sget(SK.rems),sget(SK.deals),sget(SK.goals),sget(SK.act),sget(SK.scores),sget(SK.txs),sget(SK.oh),sget(SK.enrolled),sget(SK.apikey),sget(SK.listings),sget(SK.market),sget(SK.dismissed),sget(SK.social),sget(SK.cmas),sget(SK.fubsync)]);
       if (cma) setCmas(cma);
+      if (fb) setFub(fb);
       // On load, only drop null/non-object entries (the "stuck on Loading" guard) — do NOT merge/collapse
       // duplicates here. On-load merging silently deleted real leads (e.g. one owner with several farm homes).
       // Deliberate de-duping still happens via the explicit "merge duplicates" tool, never automatically on load.
@@ -764,6 +766,7 @@ function App() {
   const pendRem = rems.filter(function(r){ return !r.done; }).length;
   const watchN = leads.filter(function(l){ return l.prospect && l.prospect!=="circle"; }).length;
   const circleN = leads.filter(function(l){ return l.prospect==="circle"; }).length;
+  const fubNewN = (fub||[]).filter(function(c){ return c && c.hasEmail && !c.inLeads; }).length;
   const dueToday = leads.filter(function(l){ return l.fu && l.fu <= toDay(); }).length;
   const nurtureDueN = leads.filter(nurtureDue).length;
   const socialDueN = social.filter(function(p){ return p.status!=="posted" && p.date && p.date <= toDay(); }).length;
@@ -771,7 +774,7 @@ function App() {
 
   const NAV = [
     {s:"Daily",items:[{id:"dashboard",l:"Dashboard"},{id:"calendar",l:"Today"},{id:"rems",l:"Reminders",b:pendRem}]},
-    {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.filter(function(l){ return !hideFromLeads(l); }).length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired/FSBO/Lost",b:watchN},{id:"circle",l:"Circle Prospecting",b:circleN},{id:"dialer",l:"☎️ Call Session"}]},
+    {s:"Pipeline",items:[{id:"leads",l:"All Leads",b:leads.filter(function(l){ return !hideFromLeads(l); }).length},{id:"addlead",l:"Add Lead"},{id:"pipeline",l:"Deal Pipeline"},{id:"watch",l:"Expired/FSBO/Lost",b:watchN},{id:"circle",l:"Circle Prospecting",b:circleN},{id:"fub",l:"📥 Follow Up Boss",b:fubNewN},{id:"dialer",l:"☎️ Call Session"}]},
     {s:"Marketing",items:[{id:"campaigns",l:"Campaign Calendar"},{id:"social",l:"Social Studio",b:socialDueN},{id:"actionplans",l:"Action Plans"},{id:"nurture",l:"Auto-Nurture",b:nurtureDueN},{id:"mktgemail",l:"Market Email"},{id:"aiemail",l:"AI Email Writer"}]},
     {s:"Clients",items:[{id:"rs",l:"Buyer Alerts"},{id:"selleralerts",l:"Seller Alerts"},{id:"anniv",l:"Anniversaries",b:annivDueN}]},
     {s:"Deals",items:[{id:"listings",l:"My Listings",b:listings.length},{id:"listbuild",l:"🏗️ Listing Builder"},{id:"cma",l:"🏷️ CMA / Comps"},{id:"oh",l:"Open House"},{id:"net",l:"Seller Net Sheet"},{id:"buyernet",l:"Buyer Net Sheet"},{id:"tx",l:"Transactions"},{id:"buyer",l:"Buyer Criteria"}]},
@@ -833,6 +836,7 @@ function App() {
           {tab==="pipeline"  && <PanelPipeline {...pp} />}
           {tab==="watch"     && <PanelWatch {...pp} />}
           {tab==="circle"    && <PanelCircle leads={leads} setLeads={setLeads} />}
+          {tab==="fub"       && <PanelFub fub={fub} setFub={setFub} leads={leads} setLeads={setLeads} setFocusLead={setFocusLead} setTab={setTab} />}
           {tab==="cma"       && <PanelCMA {...pp} />}
           {tab==="roadmap"   && <PanelRoadmap {...pp} />}
           {tab==="calc"      && <PanelLeadCalc />}
@@ -1285,6 +1289,66 @@ function CollapsibleList(props){
     <div>
       {shown.map(render)}
       {items.length>initial && <div onClick={function(){ setClOpen(!clOpen); }} style={{cursor:"pointer",textAlign:"center",padding:"9px 0 2px",marginTop:2,fontSize:12,fontWeight:700,color:C.ac,userSelect:"none"}}>{clOpen ? ("▴ Collapse list (hide "+(items.length-initial)+")") : ("▾ Show all "+items.length+" — tap to expand")}</div>}
+    </div>
+  );
+}
+function PanelFub({fub,setFub,leads,setLeads,setFocusLead,setTab}){
+  var [q,setQ]=useState("");
+  var [syncing,setSyncing]=useState(false);
+  var [msg,setMsg]=useState("");
+  var all=fub||[];
+  var total=all.length;
+  var withEmail=all.filter(function(c){return c&&c.hasEmail;}).length;
+  var notLead=all.filter(function(c){return c&&!c.inLeads;}).length;
+  var newEm=all.filter(function(c){return c&&c.hasEmail&&!c.inLeads;}).length;
+  var withAddr=all.filter(function(c){return c&&String(c.addr||"").trim();}).length;
+  var _q=(q||"").trim().toLowerCase();
+  var list=all.slice();
+  if(_q) list=list.filter(function(c){ return (((c.name||"")+" "+(c.email||"")+" "+(c.phone||"")+" "+(c.addr||"")+" "+(c.source||"")).toLowerCase().indexOf(_q)>=0); });
+  list.sort(function(a,b){ return String(b.created||"").localeCompare(String(a.created||"")); });
+  async function syncNow(){
+    if(syncing) return;
+    setSyncing(true); setMsg("Syncing from Follow Up Boss…");
+    try{
+      await fetch(SUPABASE_URL+"/functions/v1/fub-sync",{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+SUPABASE_ANON_KEY},body:"{}"});
+      if(supa&&_session){ var rr=await supa.from("hub_state").select("value").eq("user_id",_session.user.id).eq("key","hub:fubsync").single(); var fresh=rr.data&&rr.data.value; if(fresh){ _cache["hub:fubsync"]=fresh; setFub(fresh); setMsg("Synced "+fresh.length+" contacts."); } else { setMsg("Synced."); } }
+    }catch(e){ setMsg("Sync failed — try again."); }
+    setSyncing(false);
+  }
+  function addToLeads(c){
+    var id="fub_"+c.fubId;
+    setLeads(function(p){ p=p||[]; if(p.some(function(x){ return x.id===id || (c.fubId&&x.fubId===c.fubId&&(!x.prospect||x.prospect==="")); })) return p; return p.concat([{ id:id, first:c.first||"", last:c.last||"", name:c.name||"", email:c.email||"", email2:c.email2||"", phone:c.phone||"", phone2:c.phone2||"", addr:c.addr||"", type:"seller", temp:"warm", prospect:"", source:c.source||"Follow Up Boss", fubId:c.fubId, nurture:"monthly", added:toDay(), log:[toDay()+" — Added from Follow Up Boss tab"] }]); });
+    setFub(function(p){ return (p||[]).map(function(x){ return x.fubId===c.fubId?{...x,inLeads:true,leadMatchId:id}:x; }); });
+  }
+  function rowC(c){
+    return (
+      <div key={c.fubId} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid "+C.br}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:600}}>{c.name||"(no name)"} {c.inLeads?<span style={{fontSize:10,color:C.ac,fontWeight:700}}>✓ in Leads</span>:<span style={{fontSize:10,color:C.go,fontWeight:700}}>＋ new</span>}</div>
+          <div style={{fontSize:11,color:C.t3}}>{[c.email,c.phone,c.addr].filter(Boolean).join(" · ")||"—"}</div>
+          <div style={{fontSize:10.5,color:C.t3}}>{[c.source,c.stage].filter(Boolean).join(" · ")}{c.tags&&c.tags.length?" · "+c.tags.join(", "):""}</div>
+        </div>
+        {!c.inLeads && <Btn style={{fontSize:10,padding:"3px 8px",whiteSpace:"nowrap"}} title="Copy this contact into your Leads" onClick={function(){ addToLeads(c); }}>➕ Add to Leads</Btn>}
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div style={{fontSize:18,fontWeight:700,marginBottom:6}}>📥 Follow Up Boss</div>
+      <div style={{fontSize:12.5,color:C.t2,marginBottom:14,lineHeight:1.5,maxWidth:700}}>A live mirror of your <b>Follow Up Boss</b> contacts (Mojo feeds expireds into FUB; this pulls them here). It's kept <b>separate from All Leads on purpose</b> — nothing here touches your main list until you tap <b>➕ Add to Leads</b>. Great for growing your email list. It refreshes every morning, and these addresses are watched daily for expired / new listing / pending / sold.</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12,alignItems:"center"}}>
+        <Btn v="primary" onClick={syncNow}>{syncing?"Syncing…":"🔄 Sync now"}</Btn>
+        {msg && <span style={{fontSize:12,color:C.t3}}>{msg}</span>}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(108px,1fr))",gap:8,marginBottom:14}}>
+        {[["Contacts",total],["With email",withEmail],["Not yet a lead",notLead],["New emailable",newEm],["With address",withAddr]].map(function(s){
+          return <div key={s[0]} style={{background:C.sur,border:"1px solid "+C.br,borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:20,fontWeight:700,color:C.ac,fontFamily:"monospace"}}>{s[1]}</div><div style={{fontSize:11,color:C.t3}}>{s[0]}</div></div>;
+        })}
+      </div>
+      <input value={q} onChange={function(e){ setQ(e.target.value); }} placeholder="🔍 Find a FUB contact by name, email, phone, address…" style={{...inp,marginBottom:14}} />
+      <Card title={"Follow Up Boss contacts (" + list.length + ")"}>
+        {list.length===0 ? <div style={{color:C.t3,fontSize:13}}>No contacts yet — tap 🔄 Sync now.</div> : <CollapsibleList items={list} render={rowC} initial={12} />}
+      </Card>
     </div>
   );
 }
